@@ -52,6 +52,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextPane;
 import javax.swing.JTextArea;
+import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.event.DocumentEvent;
@@ -73,19 +74,19 @@ final class InteractionSearchPanel implements Disposable {
     private static final Pattern JSON_TOKEN = Pattern.compile("\"(?:\\\\.|[^\"\\\\])*\"(?=\\s*:)|\"(?:\\\\.|[^\"\\\\])*\"|-?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?|\\b(?:true|false|null)\\b");
     private final Project project;
     private final JPanel root = new JPanel(new BorderLayout(0, 8));
-    private final JLabel status = new JLabel("Pronto para analisar");
+    private final JTextArea status = LensUi.wrapped("Pronto para analisar", 1);
     private final JLabel collectionLabel = new JLabel("Nenhuma collection carregada");
     private final JLabel resultCount = new JLabel("0 resultados");
     private final JLabel heroEyebrow = new JLabel();
-    private final JLabel heroHeading = new JLabel();
-    private final JLabel heroHint = new JLabel();
+    private final JTextArea heroHeading = LensUi.wrapped("", 2);
+    private final JTextArea heroHint = LensUi.wrapped("", 2);
     private final JLabel resultTitle = new JLabel();
-    private final JLabel safetyHint = new JLabel();
-    private final JLabel curlHint = new JLabel();
-    private final JLabel collectionHint = new JLabel();
+    private final JTextArea safetyHint = LensUi.wrapped("", 2);
+    private final JTextArea curlHint = LensUi.wrapped("", 2);
+    private final JTextArea collectionHint = LensUi.wrapped("", 2);
     private final JTextArea curlInput = new JTextArea();
     private final JTextPane collectionPreview = new JTextPane();
-    private final JPanel resultCards = new JPanel();
+    private final JPanel resultCards = LensUi.scrollingCards();
     private final JBTabbedPane sourceTabs = new JBTabbedPane();
     private final JButton analyzeButton = new JButton();
     private JButton curlFileButton;
@@ -107,7 +108,7 @@ final class InteractionSearchPanel implements Disposable {
         root.setOpaque(true);
         root.setBackground(BACKGROUND);
         root.setBorder(JBUI.Borders.empty(4, 0, 0, 0));
-        root.setPreferredSize(new Dimension(JBUI.scale(900), JBUI.scale(520)));
+        root.setPreferredSize(new Dimension(JBUI.scale(400), JBUI.scale(520)));
 
         JPanel hero = new JPanel(new BorderLayout(8, 6));
         hero.setOpaque(true);
@@ -134,12 +135,13 @@ final class InteractionSearchPanel implements Disposable {
         hero.add(heroText, BorderLayout.CENTER);
         status.setForeground(ACCENT);
         status.setFont(status.getFont().deriveFont(Font.BOLD, 10f));
-        status.setHorizontalAlignment(JLabel.RIGHT);
-        hero.add(status, BorderLayout.EAST);
+        status.setMaximumSize(new Dimension(Integer.MAX_VALUE, JBUI.scale(36)));
+        hero.add(status, BorderLayout.SOUTH);
         root.add(hero, BorderLayout.NORTH);
 
         sourceTabs.addTab(LensPreferences.text("cURL", "cURL"), createCurlTab());
         sourceTabs.addTab(LensPreferences.text("Collection", "Collection"), createCollectionTab());
+        sourceTabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         sourceTabs.setOpaque(true);
         sourceTabs.setBackground(SURFACE);
         sourceTabs.setForeground(new Color(0xD6E2F0));
@@ -156,14 +158,14 @@ final class InteractionSearchPanel implements Disposable {
 
         JPanel results = new JPanel(new BorderLayout(0, 5));
         results.setOpaque(false);
-        JPanel resultHeader = new JPanel(new BorderLayout());
+        JPanel resultHeader = new JPanel(new java.awt.GridLayout(0, 1, 0, 3));
         resultHeader.setOpaque(false);
         resultTitle.setText("MATCH SCORE  /  HEURÍSTICO");
         resultTitle.setForeground(new Color(0x71859B));
         resultTitle.setFont(resultTitle.getFont().deriveFont(Font.BOLD, 10f));
         resultCount.setForeground(new Color(0x8FA4BA));
-        resultHeader.add(resultTitle, BorderLayout.WEST);
-        resultHeader.add(resultCount, BorderLayout.EAST);
+        resultHeader.add(resultTitle);
+        resultHeader.add(resultCount);
         results.add(resultHeader, BorderLayout.NORTH);
         results.add(resultScroll, BorderLayout.CENTER);
 
@@ -175,11 +177,11 @@ final class InteractionSearchPanel implements Disposable {
         safetyHint.setForeground(new Color(0x71859B));
         safetyHint.setFont(safetyHint.getFont().deriveFont(10f));
         actions.add(safetyHint, BorderLayout.CENTER);
-        actions.add(analyzeButton, BorderLayout.EAST);
+        actions.add(analyzeButton, BorderLayout.SOUTH);
         inputArea.add(actions, BorderLayout.SOUTH);
 
-        javax.swing.JSplitPane split = new javax.swing.JSplitPane(javax.swing.JSplitPane.HORIZONTAL_SPLIT, inputArea, results);
-        split.setResizeWeight(0.42);
+        javax.swing.JSplitPane split = new javax.swing.JSplitPane(javax.swing.JSplitPane.VERTICAL_SPLIT, inputArea, results);
+        split.setResizeWeight(0.48);
         split.setBorder(null);
         split.setContinuousLayout(true);
         split.setOneTouchExpandable(true);
@@ -187,7 +189,20 @@ final class InteractionSearchPanel implements Disposable {
         split.setOpaque(true);
         split.setBackground(BACKGROUND);
         root.add(split, BorderLayout.CENTER);
-        SwingUtilities.invokeLater(() -> split.setDividerLocation(0.42));
+        root.addComponentListener(new java.awt.event.ComponentAdapter() {
+            private boolean narrow = true;
+            @Override public void componentResized(java.awt.event.ComponentEvent event) {
+                boolean next = root.getWidth() < JBUI.scale(850);
+                if (narrow == next) return;
+                narrow = next;
+                split.setOrientation(next ? javax.swing.JSplitPane.VERTICAL_SPLIT
+                    : javax.swing.JSplitPane.HORIZONTAL_SPLIT);
+                split.setDividerLocation(next ? 0.48 : 0.42);
+            }
+        });
+        SwingUtilities.invokeLater(() -> {
+            if (!disposed) split.setDividerLocation(0.48);
+        });
 
         analyzeButton.addActionListener(this::analyze);
         styleButton(analyzeButton);
@@ -216,8 +231,8 @@ final class InteractionSearchPanel implements Disposable {
             "Paste a command. It is parsed only and never executed."));
         curlFileButton.setText(LensPreferences.text("Abrir arquivo cURL...", "Open cURL file..."));
         collectionHint.setText(english
-            ? "<html>Load a <b>Postman v2.1</b> or <b>Insomnia JSON</b> export.<br>Requests are analyzed and ranked separately.</html>"
-            : "<html>Carregue um export <b>Postman v2.1</b> ou <b>Insomnia JSON</b>.<br>Todos os requests serão analisados e ranqueados separadamente.</html>");
+            ? "Load a Postman v2.1 or Insomnia JSON export. Requests are analyzed separately."
+            : "Carregue um export Postman v2.1 ou Insomnia JSON. Requests são analisados separadamente.");
         collectionFileButton.setText(LensPreferences.text("Carregar collection JSON...", "Load collection JSON..."));
         if (collectionRequests.isEmpty()) collectionLabel.setText(LensPreferences.text(
             "Nenhuma collection carregada", "No collection loaded"));
@@ -245,6 +260,8 @@ final class InteractionSearchPanel implements Disposable {
         curlHint.setForeground(new Color(0x8FA4BA));
         panel.add(curlHint, BorderLayout.NORTH);
         curlInput.setRows(6);
+        curlInput.setLineWrap(true);
+        curlInput.setWrapStyleWord(false);
         curlInput.setFont(new Font(LensPreferences.curlFont(), Font.PLAIN, LensPreferences.curlSize()));
         curlInput.putClientProperty("jsonlens.fontRole", "curl");
         curlInput.setMargin(new java.awt.Insets(8, 10, 8, 10));
@@ -540,10 +557,10 @@ final class InteractionSearchPanel implements Disposable {
         header.setBackground(new Color(0x0A1420));
         header.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createMatteBorder(0, 3, 0, 0, ACCENT), JBUI.Borders.empty(8, 10)));
-        JLabel name = new JLabel(request.name());
+        JTextArea name = LensUi.wrapped(request.name(), 2);
         name.setFont(name.getFont().deriveFont(Font.BOLD, 12f));
         name.setForeground(new Color(0xE7F0FA));
-        JLabel route = new JLabel(request.method() + " " + request.path());
+        JTextArea route = LensUi.wrapped(request.method() + " " + request.path(), 2);
         route.setForeground(new Color(0x8FA4BA));
         route.setFont(route.getFont().deriveFont(Font.PLAIN, 11f));
         header.add(name, BorderLayout.NORTH);
@@ -568,11 +585,11 @@ final class InteractionSearchPanel implements Disposable {
         JPanel identity = new JPanel();
         identity.setOpaque(false);
         identity.setLayout(new BoxLayout(identity, BoxLayout.Y_AXIS));
-        JLabel title = new JLabel(snapshot.title);
+        JTextArea title = LensUi.wrapped(snapshot.title, 2);
         title.setFont(title.getFont().deriveFont(Font.BOLD, 12f));
         title.setForeground(new Color(0xE7F0FA));
-        JLabel route = new JLabel(snapshot.verb + " " + snapshot.path + "  •  "
-            + LensPreferences.text("match", "match") + " " + match.score() + "/100");
+        JTextArea route = LensUi.wrapped(snapshot.verb + " " + snapshot.path + "  •  "
+            + LensPreferences.text("match", "match") + " " + match.score() + "/100", 2);
         route.setForeground(new Color(0x8FA4BA));
         route.setFont(route.getFont().deriveFont(Font.PLAIN, 11f));
         identity.add(title);
@@ -591,13 +608,13 @@ final class InteractionSearchPanel implements Disposable {
         detail.setOpaque(false);
         detail.setLayout(new BoxLayout(detail, BoxLayout.Y_AXIS));
         for (String evidence : match.evidence()) {
-            JLabel line = new JLabel("• " + evidence);
+            JTextArea line = LensUi.wrapped("• " + evidence, 3);
             line.setForeground(new Color(0xB6C7D8));
             line.setFont(line.getFont().deriveFont(10f));
             detail.add(line);
         }
         String path = relativePath(endpoint.file());
-        JLabel source = new JLabel(path);
+        JTextArea source = LensUi.wrapped(path, 2);
         source.setForeground(new Color(0x71859B));
         source.setFont(source.getFont().deriveFont(Font.ITALIC, 10f));
         detail.add(Box.createVerticalStrut(3));
@@ -627,11 +644,7 @@ final class InteractionSearchPanel implements Disposable {
         JButton open = new JButton(LensPreferences.text("Abrir código", "Open code"));
         styleButton(open);
         open.addActionListener(e -> open(endpoint.file(), endpoint.offset()));
-        JPanel footer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
-        footer.setOpaque(false);
-        footer.add(expand);
-        footer.add(pasteContract);
-        footer.add(open);
+        JPanel footer = LensUi.adaptiveRow(JBUI.scale(570), expand, pasteContract, open);
         card.add(footer, BorderLayout.SOUTH);
         return card;
     }
@@ -680,10 +693,10 @@ final class InteractionSearchPanel implements Disposable {
         input.setBackground(theme.surface());
         input.setForeground(theme.secondaryText());
         input.setCaretColor(theme.accent());
-        input.setPreferredSize(new Dimension(JBUI.scale(620), JBUI.scale(240)));
+        input.setPreferredSize(new Dimension(JBUI.scale(400), JBUI.scale(210)));
         input.setText(match.contractBody() == null ? "" : match.contractBody());
         applyJsonColors(input);
-        JTextArea findings = new JTextArea(7, 56);
+        JTextArea findings = new JTextArea(7, 35);
         findings.setEditable(false);
         findings.putClientProperty("jsonlens.fontRole", "info");
         findings.setLineWrap(true);
@@ -862,18 +875,17 @@ final class InteractionSearchPanel implements Disposable {
         JTextPane preview = jsonPreview(value);
         JScrollPane pane = new JScrollPane(preview);
         pane.setBorder(BorderFactory.createLineBorder(BORDER));
-        pane.setPreferredSize(new Dimension(JBUI.scale(360), JBUI.scale(145)));
+        pane.setPreferredSize(new Dimension(JBUI.scale(165), JBUI.scale(145)));
         pane.getViewport().setBackground(LensTheme.current().background());
         parent.add(pane);
         parent.add(Box.createVerticalStrut(6));
     }
 
-    private static JLabel detailLabel(String text) {
-        JLabel label = new JLabel("<html><div style='width:340px'>" + escapeHtml(text) + "</div></html>");
+    private static JTextArea detailLabel(String text) {
+        JTextArea label = LensUi.wrapped(text, 3);
         label.setForeground(LensTheme.current().secondaryText());
         label.setFont(label.getFont().deriveFont(11f));
         label.setBorder(JBUI.Borders.empty(3, 0));
-        label.setAlignmentX(Component.LEFT_ALIGNMENT);
         return label;
     }
 
@@ -963,7 +975,7 @@ final class InteractionSearchPanel implements Disposable {
 
     private void showMessage(String message) {
         resultCards.removeAll();
-        JLabel label = new JLabel("<html><div style='width:270px'>" + escapeHtml(message) + "</div></html>");
+        JTextArea label = LensUi.wrapped(message, 3);
         label.setForeground(new Color(0x8FA4BA));
         label.setBorder(JBUI.Borders.empty(12));
         label.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -1016,6 +1028,7 @@ final class InteractionSearchPanel implements Disposable {
 
     void applyPreferences() {
         curlInput.setFont(new Font(LensPreferences.curlFont(), Font.PLAIN, JBUI.scale(LensPreferences.curlSize())));
+        collectionPreview.setFont(new Font(LensPreferences.jsonFont(), Font.PLAIN, JBUI.scale(LensPreferences.jsonSize())));
         applyJsonColors(collectionPreview);
         recolorJsonPanes(root);
     }
