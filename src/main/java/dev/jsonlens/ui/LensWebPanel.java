@@ -604,6 +604,9 @@ public final class LensWebPanel implements Disposable {
         String finalScope = scope;
         String selectedKey = snapshot == null ? "" : WContractProjectState.key(snapshot);
         if (scope.equals("isolated") && selectedKey.isBlank()) {
+            JsonObject cancel = new JsonObject();
+            cancel.addProperty("type", "assessment-cancelled");
+            send(cancel);
             notice("Selecione um endpoint para a avaliação isolada."); return;
         }
         var bindings = project.getService(WContractProjectState.class).bindings();
