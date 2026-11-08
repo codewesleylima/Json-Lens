@@ -41,6 +41,8 @@ public final class WContractActions {
             for (var candidate : javaFile.getClasses()) if (supported(candidate)) { clazz = candidate; break; }
         }
         if (clazz == null || !supported(clazz)) return false;
+        PsiMethod inMethod = PsiTreeUtil.getParentOfType(leaf, PsiMethod.class);
+        if (inMethod != null && !mapped(inMethod)) return false;
         for (PsiMethod method : clazz.getMethods()) if (mapped(method)) return true;
         return false;
     }
@@ -81,11 +83,31 @@ public final class WContractActions {
             VirtualFile[] files = FileEditorManager.getInstance(project).getSelectedFiles();
             VirtualFile file = files.length > 0 ? files[0] : null;
             int offset = editor == null ? 0 : editor.getCaretModel().getOffset();
+            String destination = view;
+            if ("contract".equals(view) && editor != null &&
+                e.getData(CommonDataKeys.PSI_FILE) instanceof PsiJavaFile javaFile) {
+                boolean choose = ReadAction.compute(() -> {
+                    var leaf = javaFile.findElementAt(Math.min(offset,Math.max(0,javaFile.getTextLength()-1)));
+                    PsiMethod direct = PsiTreeUtil.getParentOfType(leaf,PsiMethod.class);
+                    if (direct == null) return true;
+                    if (!editor.getSelectionModel().hasSelection()) return false;
+                    int from = editor.getSelectionModel().getSelectionStart();
+                    int to = editor.getSelectionModel().getSelectionEnd();
+                    int count = 0;
+                    for (PsiClass clazz : javaFile.getClasses())
+                        for (PsiMethod method : clazz.getMethods())
+                            if (mapped(method) && method.getTextRange().getStartOffset() < to
+                                && method.getTextRange().getEndOffset() > from) count++;
+                    return count > 1;
+                });
+                if (choose) destination = "catalog";
+            }
+            String targetView = destination;
             ToolWindow window = ToolWindowManager.getInstance(project).getToolWindow("WContract");
             if (window == null) return;
             window.activate(() -> {
                 LensWebPanel panel = project.getUserData(LensWebPanel.ACTIVE);
-                if (panel != null) panel.focusFromEditor(file, offset, view);
+                if (panel != null) panel.focusFromEditor(file, offset, targetView);
                 // Swing fallback remains bound to the editor caret.
             }, true);
         }
