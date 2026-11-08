@@ -6,6 +6,7 @@
     <description><![CDATA[Interactive Spring REST and Feign request/response previews with live JSON contract validation.]]></description>
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.java</depends>
+    <depends>com.intellij.modules.jcef</depends>
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow id="JSON Lens" anchor="right" icon="/icons/jsonlens-plugin.png" factoryClass="dev.jsonlens.ui.LensToolWindowFactory"/>
     </extensions>

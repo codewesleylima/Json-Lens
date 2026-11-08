@@ -21,8 +21,9 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
     testRuntimeOnly("org.junit.vintage:junit-vintage-engine:5.11.4")
     intellijPlatform {
-        intellijIdea("2025.3")
+        intellijIdea("2025.3.1")
         bundledPlugin("com.intellij.java")
+        bundledPlugin("com.intellij.modules.jcef")
         testFramework(TestFrameworkType.Platform)
         testFramework(TestFrameworkType.Plugin.Java)
         pluginVerifier()
@@ -45,7 +46,7 @@ intellijPlatform {
         description = "Live JSON previews and offline request-to-endpoint matching for Java controllers and Feign clients."
         vendor { name = "JSON Lens" }
         ideaVersion {
-            sinceBuild = "253"
+            sinceBuild = "253.29346.138"
             untilBuild = provider { null }
         }
     }
