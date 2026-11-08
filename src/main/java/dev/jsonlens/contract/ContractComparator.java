@@ -29,6 +29,18 @@ public final class ContractComparator {
             out.add(new Finding(Severity.ERROR, pointer, "Tipo incompatível: projeto envia " + actual.kind + ", contrato exige " + expected.kind + "."));
             return;
         }
+        if ("string".equals(expected.kind) && "date-time".equals(expected.format)) {
+            if ("java.time.LocalDateTime".equals(actual.javaType))
+                out.add(new Finding(Severity.WARNING, pointer,
+                    "Risco temporal: LocalDateTime não inclui offset/fuso; contrato requer timestamp date-time com offset. " +
+                    "Confirme ZoneId ou converta explicitamente para OffsetDateTime/Instant."));
+            else if ("date".equals(actual.format))
+                out.add(new Finding(Severity.ERROR, pointer,
+                    "Contrato requer date-time com offset, mas o produtor declara somente date."));
+            else if (actual.format == null)
+                out.add(new Finding(Severity.WARNING, pointer,
+                    "Campo string deve respeitar date-time no contrato; formatação não comprovada estaticamente."));
+        }
         if (!expected.nullable && actual.nullable) {
             out.add(new Finding(Severity.WARNING, pointer, "Projeto permite null, mas o contrato não declara null como aceito."));
         }

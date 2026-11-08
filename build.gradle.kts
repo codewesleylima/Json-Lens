@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "dev.jsonlens"
-version = "0.1.0"
+version = "0.2.0"
 
 repositories {
     mavenCentral()
@@ -41,9 +41,9 @@ intellijPlatform {
 
     pluginConfiguration {
         id = "dev.jsonlens.livecontracts"
-        name = "JSON Lens - Live API Contracts"
+        name = "WContract - API Contract Intelligence"
         version = project.version.toString()
-        description = "Live JSON previews and offline request-to-endpoint matching for Java controllers and Feign clients."
+        description = "Offline Java API contracts, cURL, integration discovery, local risk assessment and evaluation reports."
         vendor { name = "JSON Lens" }
         ideaVersion {
             sinceBuild = "253.29346.138"

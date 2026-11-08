@@ -1,6 +1,50 @@
+# WContract — API Contract Intelligence (v0.2)
+
+**WContract** é a evolução do JSON Lens para IntelliJ IDEA: visualização estática e offline de contratos de API, geração de cURL, descoberta de integrações Java e avaliação de riscos com histórico local, sem IA ou execução automática de requests.
+
+> Mantivemos o ID técnico do plugin (\`dev.jsonlens.livecontracts\`) para permitir upgrade da instalação anterior.
+
+## Experiência principal
+
+1. Abra uma classe \`@RestController\` ou \`@FeignClient\` no IntelliJ. A tool window **WContract** apresenta os endpoints declarados na classe; clique em **Expandir contrato** para Request, Response, JSON Schema e cURL.
+2. No editor Java, botão direito → **WContract** → **Visualizar Request / Response**, **Copiar cURL**, **Avaliar endpoints que interagem**, **Avaliar contrato do endpoint** ou **Avaliar projeto completo**. O menu aparece apenas quando o contexto Java reconhecido oferece endpoints.
+3. Na aba **Integrações**, clique **Mapear conexões**. O analisador segue chamadas Java resolvidas pelo PSI até 3 níveis, identifica clientes Feign e sinaliza chamadas HTTP dinâmicas que não conseguiu associar.
+4. Para avaliar uma API externa, selecione o endpoint consumidor e **associe um JSON, JSON Schema ou OpenAPI local** (máximo 180 KB; até 100 associações por projeto). A fonte é armazenada em configurações **locais do workspace**, não enviada a serviços externos.
+5. Em **Relatórios**, escolha **Endpoint selecionado** ou **Projeto completo** e clique **AVALIAR**. A etapa de descoberta mostra progresso indeterminado; durante a comparação é exibida a porcentagem real das unidades processadas. É possível cancelar. Avaliações concluídas são guardadas com data, escopo, cobertura, erros e aderência (últimas 30).
+6. Em **Riscos**, problemas estruturais confirmados e suspeitas de origem dos valores são separados. O botão **Ir ao código** abre a localização PSI da ocorrência quando disponível.
+
+## Como interpretar as métricas
+
+- **Aderência**: percentual das comparações contra contratos disponíveis que terminaram sem erro ou aviso. Não significa garantia de compatibilidade em execução.
+- **Cobertura**: número de endpoints avaliados com documentos associados / número de endpoints no escopo.
+- **Não verificado**: sem documento externo suficiente para comparação, exibido com aderência **não determinada** em vez de 100%.
+- **Origem suspeita**: um setter \`setNomeCompleto(cliente.getIdade())\` é sinalizado como **SUSPEITA**, não como falha confirmada. Há navegação até o mapeamento encontrado; qualquer correção deve ser validada pelo desenvolvedor.
+- **Risco temporal**: um \`LocalDateTime\` comparado a um campo explicitamente \`date-time\` recebe aviso de offset ausente. Não se deduz fuso com base no país do consumidor.
+
+## Arquitetura e limites
+
+- Interface: HTML/CSS/JavaScript JCEF; alternativa Swing existente quando Chromium não é suportado. **IntelliJ IDEA 2025.3.1+**, Java 21.
+- Engine: Java PSI, \`JavaEndpointInspector\`, \`WContractGraph\`, \`ContractParser\`, \`ContractComparator\` e \`WContractAssessment\`. Não executa aplicação nem usa IA.
+- O grafo considera **Feign** quando o método é resolvido; chamadas a \`RestTemplate\`, \`RestClient\` e \`WebClient\` ainda podem ser apenas identificadas como destino não resolvido.
+- MapStruct, reflection, lógica condicional dinâmica, serializadores personalizados e chamadas HTTP em runtime podem escapar à análise.
+- Um método Java que invoca outro endpoint não comprova que houve uma comunicação HTTP entre serviços.
+- Avaliação completa usa um snapshot dos endpoints/contratos, em background com cancelamento; projetos muito grandes podem exigir indexação e limites adicionais.
+- **Não há aplicação automática de quick fixes** nem testes de integração executados pelo plugin.
+- O design foi preparado para larguras estreitas e painéis redimensionáveis, mas a inspeção visual em um IntelliJ gráfico deve complementar os testes de CI.
+
+## Testes e distribuição
+
+\`\`\`bash
+./gradlew clean test buildPlugin verifyPlugin verifyPluginStructure verifyPluginProjectConfiguration
+\`\`\`
+
+O ZIP instalável fica em \`build/distributions/\` ou nos artefatos da execução GitHub Actions do PR.
+
+---
+
 [![Wesley Lima](.github/banner.png)](https://linkedin.com/in/wesslima)
 
-# JSON Lens — Live API Contracts para IntelliJ IDEA
+# JSON Lens — arquivo histórico do projeto
 
 [![LinkedIn](https://img.shields.io/badge/linkedin-wesslima-FF6A1A?style=flat-square&labelColor=080A0C&logo=linkedin)](https://linkedin.com/in/wesslima)
 
