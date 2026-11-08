@@ -22,6 +22,11 @@ record LensTheme(
 
     static LensTheme named(String name) {
         return switch (name) {
+            case "Ember" -> new LensTheme(
+                color(0x09090C), color(0x121115), color(0x1B1718), color(0x382821),
+                color(0xFF792E), color(0xF7F0EB), color(0xD9C8BD), color(0xAF9A8F),
+                color(0x82736D), color(0xFFAE78), color(0xA8E0B6), color(0xCBA9F7),
+                color(0xFFBD81), color(0xC7ADA1));
             case "Base16" -> new LensTheme(
                 color(0x181818), color(0x202020), color(0x282828), color(0x383838),
                 color(0x7CAFC2), color(0xD8D8D8), color(0xB8B8B8), color(0xA0A0A0),

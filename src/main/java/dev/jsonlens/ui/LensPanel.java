@@ -67,12 +67,12 @@ public final class LensPanel implements Disposable {
     private final Project project;
     private final JPanel root = new JPanel(new BorderLayout(0, 12));
     private final JLabel title = new JLabel("JSON Lens");
-    private final JLabel subtitle = new JLabel();
+    private final JTextArea subtitle = LensUi.wrapped("", 2);
     private final JLabel brandEyebrow = new JLabel();
     private final JLabel methodLabel = new JLabel();
-    private final JLabel endpointTitle = new JLabel("Selecione um endpoint");
-    private final JLabel endpoint = new JLabel("Sem endpoint selecionado");
-    private final JLabel status = new JLabel("Aguardando análise...");
+    private final JTextArea endpointTitle = LensUi.wrapped("Selecione um endpoint", 2);
+    private final JTextArea endpoint = LensUi.wrapped("Sem endpoint selecionado", 2);
+    private final JTextArea status = LensUi.wrapped("Aguardando análise...", 1);
     private final JComboBox<JavaEndpointInspector.Option> methods = new JComboBox<>();
     private final JCheckBox schemaView = new JCheckBox();
     private final Editor requestEditor;
@@ -84,6 +84,8 @@ public final class LensPanel implements Disposable {
     private final JButton copyResponseButton = new JButton();
     private final Timer refreshTimer;
     private final InteractionSearchPanel interactionSearchPanel;
+    private final ContractWorkbenchPanel contractWorkbenchPanel;
+    private JBTabbedPane previewTabs;
     private JBTabbedPane tabs;
     private final AtomicLong generation = new AtomicLong();
     private VirtualFile pinnedFile;
@@ -101,19 +103,21 @@ public final class LensPanel implements Disposable {
         requestEditor = createJsonEditor(project);
         responseEditor = createJsonEditor(project);
         interactionSearchPanel = new InteractionSearchPanel(project);
+        contractWorkbenchPanel = new ContractWorkbenchPanel();
         endpointTitle.setText(LensPreferences.text("Selecione um endpoint", "Select an endpoint"));
         endpoint.setText(LensPreferences.text("Sem endpoint selecionado", "No endpoint selected"));
         status.setText(LensPreferences.text("Aguardando análise...", "Waiting for analysis..."));
         root.setOpaque(true);
         root.setBackground(BACKGROUND);
         root.setBorder(JBUI.Borders.empty(12));
-        root.setPreferredSize(new Dimension(JBUI.scale(900), JBUI.scale(640)));
+        root.setPreferredSize(new Dimension(JBUI.scale(410), JBUI.scale(660)));
         title.setFont(title.getFont().deriveFont(Font.BOLD, 17f));
         title.putClientProperty("jsonlens.fontRole", "heading");
         title.setForeground(TEXT);
         subtitle.setText(LensPreferences.text("Inspeção local de contratos API", "Local API contract inspection"));
         subtitle.setForeground(new Color(0x8FA4BA));
         subtitle.setFont(subtitle.getFont().deriveFont(12f));
+        subtitle.setMaximumSize(new Dimension(Integer.MAX_VALUE, JBUI.scale(44)));
         JPanel brand = new JPanel();
         brand.setOpaque(false);
         brand.setLayout(new BoxLayout(brand, BoxLayout.Y_AXIS));
@@ -136,7 +140,7 @@ public final class LensPanel implements Disposable {
         identity.setOpaque(false);
         identity.add(mark, BorderLayout.WEST);
         identity.add(brand, BorderLayout.CENTER);
-        heading.add(identity, BorderLayout.WEST);
+        heading.add(identity, BorderLayout.CENTER);
         status.setOpaque(true);
         status.setBackground(SURFACE);
         status.setBorder(BorderFactory.createCompoundBorder(
@@ -144,9 +148,9 @@ public final class LensPanel implements Disposable {
             BorderFactory.createEmptyBorder(5, 9, 5, 9)));
         status.setForeground(new Color(0x35D6E8));
         status.setFont(status.getFont().deriveFont(11f));
+        status.setMaximumSize(new Dimension(Integer.MAX_VALUE, JBUI.scale(36)));
         JPanel headingActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
         headingActions.setOpaque(false);
-        headingActions.add(status);
         settingsButton.setText(LensPreferences.text("⚙ Config", "⚙ Settings"));
         settingsButton.setToolTipText(LensPreferences.text("Configurações de aparência e idioma", "Appearance and language settings"));
         settingsButton.setForeground(TEXT);
@@ -188,7 +192,9 @@ public final class LensPanel implements Disposable {
         top.setOpaque(false);
         top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
         top.add(heading);
-        top.add(javax.swing.Box.createVerticalStrut(12));
+        top.add(javax.swing.Box.createVerticalStrut(8));
+        top.add(status);
+        top.add(javax.swing.Box.createVerticalStrut(8));
         top.add(endpointCard);
         top.add(javax.swing.Box.createVerticalStrut(4));
         methodLabel.setText(LensPreferences.text("Método", "Method"));
@@ -206,13 +212,17 @@ public final class LensPanel implements Disposable {
         root.add(top, BorderLayout.NORTH);
 
         tabs = new JBTabbedPane();
+        tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
+        previewTabs = new JBTabbedPane();
+        previewTabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         setEditorText(requestEditor, LensPreferences.text("Abra um controller Spring MVC...", "Open a Spring MVC controller..."));
         setEditorText(responseEditor, LensPreferences.text(
             "Selecione um método para visualizar o response...", "Select a method to preview its response..."));
-        tabs.addTab(LensPreferences.text("Request", "Request"), requestEditor.getComponent());
-        tabs.addTab(LensPreferences.text("Response", "Response"), responseEditor.getComponent());
-
+        previewTabs.addTab("Request", requestEditor.getComponent());
+        previewTabs.addTab("Response", responseEditor.getComponent());
+        tabs.addTab(LensPreferences.text("Preview", "Preview"), previewTabs);
         tabs.addTab(LensPreferences.text("Localizar interação", "Find interaction"), interactionSearchPanel.component());
+        tabs.addTab(LensPreferences.text("Contratos", "Contracts"), contractWorkbenchPanel.component());
         notesView.setRows(5);
         notesView.setText(LensPreferences.text("Avisos e parâmetros de rota/query aparecerão aqui.",
             "Warnings and route/query parameters will appear here."));
@@ -248,7 +258,7 @@ public final class LensPanel implements Disposable {
         sections.addTab(LensPreferences.text("Geral", "General"), general);
 
         JPanel appearance = settingsForm();
-        JComboBox<String> themes = new JComboBox<>(new String[]{"Midnight", "Base16", "Ocean"});
+        JComboBox<String> themes = new JComboBox<>(new String[]{"Ember", "Midnight", "Base16", "Ocean"});
         themes.setSelectedItem(LensPreferences.theme());
         JComboBox<String> infoFont = fontSelector(LensPreferences.infoFont());
         JComboBox<String> jsonFont = fontSelector(LensPreferences.jsonFont());
@@ -304,11 +314,12 @@ public final class LensPanel implements Disposable {
         settingsButton.setText(LensPreferences.text("⚙ Config", "⚙ Settings"));
         settingsButton.setToolTipText(LensPreferences.text("Configurações de aparência e idioma", "Appearance and language settings"));
         if (tabs != null) {
-            tabs.setTitleAt(0, LensPreferences.text("Request", "Request"));
-            tabs.setTitleAt(1, LensPreferences.text("Response", "Response"));
-            tabs.setTitleAt(2, LensPreferences.text("Localizar interação", "Find interaction"));
+            tabs.setTitleAt(0, LensPreferences.text("Preview", "Preview"));
+            tabs.setTitleAt(1, LensPreferences.text("Localizar interação", "Find interaction"));
+            tabs.setTitleAt(2, LensPreferences.text("Contratos", "Contracts"));
             tabs.setTitleAt(3, LensPreferences.text("Detalhes", "Details"));
         }
+        contractWorkbenchPanel.applyLanguage();
         interactionSearchPanel.applyLanguage();
         if (lastSnapshot == null) {
             endpointTitle.setText(LensPreferences.text("Selecione um endpoint", "Select an endpoint"));
@@ -322,6 +333,7 @@ public final class LensPanel implements Disposable {
         refreshJsonEditor(requestEditor);
         refreshJsonEditor(responseEditor);
         interactionSearchPanel.applyPreferences();
+        contractWorkbenchPanel.applyPreferences();
         root.revalidate();
         root.repaint();
     }
@@ -472,6 +484,7 @@ public final class LensPanel implements Disposable {
             }
         } finally { modifyingControls = false; }
         lastSnapshot = inspection.snapshot();
+        contractWorkbenchPanel.setSnapshot(lastSnapshot);
         if (lastSnapshot == null) {
             endpointTitle.setText(LensPreferences.text("Nenhum endpoint reconhecido", "No endpoint recognized"));
             endpoint.setText(inspection.note());
@@ -550,7 +563,8 @@ public final class LensPanel implements Disposable {
         area.setFont(new Font(LensPreferences.infoFont(), Font.PLAIN, fontSize));
         area.putClientProperty("jsonlens.fontRole", "info");
         area.setTabSize(2);
-        area.setLineWrap(false);
+        area.setLineWrap(true);
+        area.setWrapStyleWord(true);
         area.setMargin(new java.awt.Insets(12, 14, 12, 14));
         area.setBackground(BACKGROUND);
         area.setForeground(new Color(0xC7D2E3));
@@ -573,11 +587,7 @@ public final class LensPanel implements Disposable {
         return color == null ? fallback : color;
     }
     private static JPanel row(Component... components) {
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 5));
-        panel.setOpaque(false);
-        for (Component component : components) panel.add(component);
-        panel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        return panel;
+        return LensUi.adaptiveRow(JBUI.scale(590), components);
     }
     private static void styleButton(JButton button) {
         LensTheme theme = LensTheme.current();
@@ -593,6 +603,7 @@ public final class LensPanel implements Disposable {
         refreshTimer.stop();
         generation.incrementAndGet();
         interactionSearchPanel.dispose();
+        contractWorkbenchPanel.dispose();
         EditorFactory.getInstance().releaseEditor(requestEditor);
         EditorFactory.getInstance().releaseEditor(responseEditor);
     }
