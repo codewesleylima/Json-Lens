@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><title>JSON Lens • Plugin isolado</title><style>
+:root{--bg:#08090b;--chrome:#0d0e11;--surface:#111318;--surface2:#17191f;--surface3:#1d2027;--border:#282b31;--line:#22252a;--text:#eef0f4;--muted:#8d929c;--dim:#626873;--orange:#ff7b2f;--orange2:#ffa65d;--orange-soft:rgba(255,123,47,.13);--green:#66d4aa;--red:#ff777e;--yellow:#ffc66e;--blue:#8ca9ec;--radius:13px;--mono:'JetBrains Mono','Cascadia Code','Consolas',monospace;--ui:'Inter','Segoe UI',system-ui,sans-serif;--json-size:12px}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:var(--ui);font-size:13px;-webkit-font-smoothing:antialiased}button,input,textarea,select{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--orange);outline-offset:2px}button:disabled{opacity:.45;cursor:not-allowed}::selection{background:#8d492c;color:white}
+svg{display:inline-block;vertical-align:middle;flex:none}.ico{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.titlebar{height:38px;background:#090a0d;border-bottom:1px solid #1b1e22;display:flex;align-items:center;justify-content:space-between;padding:0 18px;gap:16px}.title-left,.title-actions,.main-top,.main-left,.main-right,.row,.status-left,.status-right{display:flex;align-items:center}.title-left{gap:15px}.dots{display:flex;gap:7px}.dots b{width:9px;height:9px;border-radius:50%;background:#41434b}.dots b:first-child{background:#f36f64}.dots b:nth-child(2){background:#edbe61}.dots b:nth-child(3){background:#65c898}.title-caption{font-size:11px;color:#9297a3;letter-spacing:.02em}.title-caption strong{color:#d8dae1;font-weight:600}.title-actions{gap:19px;color:#7d838d;font-size:11px}.title-actions .idea-mark{height:20px;width:20px;background:#f3a652;color:#1a0e06;display:grid;place-items:center;font-size:10px;font-weight:900;border-radius:5px}
+.toolbar{height:49px;background:#101115;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 17px;gap:18px}.main-left{gap:15px;min-width:0}.tiny-logo{width:27px;height:27px;border-radius:7px;background:linear-gradient(140deg,#ffb769,#ff7129 78%);display:grid;place-items:center;color:#1b100d;font-size:15px;font-weight:900;box-shadow:0 0 20px #ff77221d}.project-name{font-weight:650;font-size:12px;white-space:nowrap}.crumb{display:flex;align-items:center;gap:7px;color:#7c838d;font-size:11px;white-space:nowrap}.sep{color:#454953}.chip-top{display:flex;align-items:center;gap:7px;color:#afb3bd;font-size:11px;background:#191b21;padding:7px 10px;border:1px solid #2a2c31;border-radius:7px}.dot-green{width:6px;height:6px;background:#65d4a3;border-radius:50%;box-shadow:0 0 8px #65d4a390}.mini-tool{background:none;border:0;color:#9a9fa9;padding:6px;border-radius:5px}.mini-tool:hover{background:#25272e;color:white}.main-right{gap:10px}
+.layout{display:flex;height:calc(100vh - 112px);min-height:580px;overflow:hidden}.sidebar{width:228px;flex:none;background:#0d0e12;border-right:1px solid var(--border);display:flex;flex-direction:column;min-width:0}.side-heading{height:42px;padding:0 14px;display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:650;color:#c8ccd3;border-bottom:1px solid #1d2025}.folder{padding:6px 9px 8px;overflow-y:auto}.file-row{width:100%;border:0;background:none;color:#b9bec7;text-align:left;border-radius:6px;display:flex;align-items:center;gap:8px;padding:7px 9px;font-size:11px;white-space:nowrap}.file-row .filetype{font-family:var(--mono);font-weight:750;font-size:10px;color:#ffaf75;background:#3a261c;border-radius:4px;padding:2px 4px;min-width:20px;text-align:center}.file-row .ic-fold{color:#a5abb8}.file-row.dim{color:#737984}.file-row.current{background:#32231b;color:#ffd8bd}.file-row:hover{background:#1d2026}.indent1{padding-left:20px}.indent2{padding-left:32px}.indent3{padding-left:44px}.side-bottom{margin-top:auto;border-top:1px solid var(--line);padding:14px 15px;color:#848992;font-size:10px}.side-bottom b{color:#b7bbc4;display:block;margin-bottom:7px}.side-bottom div{line-height:1.8}.side-bottom .branch{color:var(--green)}
+.editor{flex:1;min-width:0;display:flex;flex-direction:column;background:#101116;position:relative}.editor-tabs{display:flex;align-items:center;height:41px;background:#111216;border-bottom:1px solid var(--border);overflow:auto hidden}.code-tab{border:0;border-right:1px solid #292b30;min-width:max-content;padding:13px 15px;background:#15171c;color:#9b9fa9;font-size:11px}.code-tab.active{color:#ececf0;background:#1b1c22;box-shadow:inset 0 2px 0 var(--orange)}.code-tab .java{color:#eeb577;margin-right:8px}.editor-path{height:37px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;color:#7d848f;font-size:11px;gap:10px}.editor-path strong{font-weight:550;color:#b9bec7}.code-area{flex:1;overflow:auto;background:#111318;padding:6px 0 22px}.code-line{display:flex;min-height:24px;font:12px/24px var(--mono);white-space:pre}.code-line.hot{background:#2d241f;box-shadow:inset 2px 0 0 var(--orange)}.ln{display:inline-block;width:56px;padding-right:17px;text-align:right;color:#4a5059;user-select:none;flex:none}.src{display:block;padding-left:8px;color:#c8cbd4}.tok-ann{color:#ffc17a}.tok-kw{color:#c9a1ed}.tok-string{color:#9acdaa}.tok-type{color:#84b2ea}.tok-cmt{color:#737e80}.tok-nm{color:#e9b7a9}.editor-tip{padding:9px 17px;border-top:1px solid #25272b;background:#14161a;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:10px;color:#818793}.editor-tip button{background:#28201c;border:1px solid #664128;color:#ffaf77;border-radius:6px;padding:6px 9px;font-size:10px;white-space:nowrap}.editor-tip button:hover{background:#422b21}.terminal{height:145px;background:#0d0f12;border-top:1px solid #24262b;display:flex;flex-direction:column}.terminal-head{height:32px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #23252a;font-size:10px;color:#adb1bc}.terminal-body{padding:11px 16px;font:10px/20px var(--mono);color:#83908d;overflow:auto}.term-orange{color:#ff9a51}.term-green{color:#61c9a0}
+.lens{width:505px;flex:none;display:flex;flex-direction:column;background:#0c0d10;border-left:1px solid #343037;box-shadow:-15px 0 45px #0005;min-width:355px}.lens-header{padding:17px 19px 13px;border-bottom:1px solid #26282d;background:radial-gradient(ellipse at 78% -40%,#492513 0,transparent 61%),#101114}.eyebrow{font-size:9px;text-transform:uppercase;font-weight:750;letter-spacing:.15em;color:#9b9ca5}.brandline{display:flex;align-items:center;gap:11px}.brand-glyph{width:35px;height:35px;border:1px solid #a85226;border-radius:10px;display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,#452619,#1c1513);box-shadow:inset 0 1px 0 #ff9e5740;color:#ffa05e}.lens-name{font-size:20px;font-weight:800;letter-spacing:-.055em;line-height:1.1}.lens-name span{color:var(--orange)}.lens-sub{color:#888d98;font-size:10px;margin-top:5px}.brand-right{margin-left:auto;display:flex;gap:7px}.round-btn{background:#222329;border:1px solid #35343a;color:#aeb0b8;border-radius:8px;width:29px;height:29px;display:grid;place-items:center;padding:0}.round-btn:hover,.round-btn.active{border-color:#96512d;background:#37261c;color:#ffaf73}.live-strip{margin-top:17px;display:flex;align-items:center;justify-content:space-between;gap:8px}.live-indicator{display:flex;align-items:center;gap:7px;color:#b6c3bb;font-size:10px}.live-indicator::before{content:'';height:7px;width:7px;border-radius:50%;background:#4edba0;box-shadow:0 0 0 3px #4edba01b,0 0 12px #4edba080}.tag{background:#2a241f;border:1px solid #6c4229;color:#ffb179;border-radius:5px;font-size:9px;padding:4px 6px;font-weight:650;letter-spacing:.02em}
+.nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:10px 12px;border-bottom:1px solid #28292e;background:#0c0d10}.nav button{min-width:0;border:0;background:transparent;color:#7f858e;border-radius:7px;padding:10px 3px 9px;font-size:10px;font-weight:650;display:flex;align-items:center;justify-content:center;gap:6px;transition:.16s}.nav button:hover{color:#ddd;background:#1b1d22}.nav button.active{background:#28201b;color:#ffad72;box-shadow:inset 0 -2px 0 var(--orange)}.nav button svg{width:14px;height:14px}.lens-scroll{overflow-y:auto;scrollbar-color:#34363e transparent;scrollbar-width:thin;flex:1}.section{padding:17px 17px 12px}.space{height:13px}.line-top{display:flex;align-items:center;justify-content:space-between;gap:10px}.section-kicker{font-size:9px;color:#777b85;letter-spacing:.16em;text-transform:uppercase;font-weight:750}.small-action{border:0;background:none;color:#ffb17b;font-size:10px;padding:5px 0}.small-action:hover{text-decoration:underline}.endpoint-card{background:linear-gradient(155deg,#221a15,#151619 58%);border:1px solid #4a3328;border-radius:12px;padding:13px;margin-top:10px}.endpoint-top{display:flex;align-items:center;gap:7px}.http-pill{background:#214835;color:#75dab2;border-radius:5px;font-size:9px;font-weight:750;padding:5px 7px;letter-spacing:.05em}.http-pill.blue{color:#b6c9ff;background:#2b3450}.role-pill{margin-left:auto;color:#bcb1a9;background:#2d2825;border:1px solid #4b3b31;font-size:9px;border-radius:5px;padding:4px 6px}.endpoint-route{font:650 14px/1.5 var(--mono);margin:9px 0 5px;letter-spacing:-.04em;overflow-wrap:anywhere}.endpoint-meta{font-size:10px;color:#888c96}.endpoint-controls{display:flex;gap:8px;margin-top:13px}.select{width:100%;min-width:0;background:#14161b;color:#e0e2e6;border:1px solid #33343a;border-radius:7px;padding:9px 8px;font-size:11px;outline:none}.select:focus{border-color:var(--orange)}.pin{flex:none;padding:0 12px;background:#252327;border:1px solid #4a3f3a;border-radius:7px;color:#c5b7ac;font-size:10px}.pin.on{color:#ffb27c;background:#3c271d;border-color:#ad5c2e}.pin:hover{border-color:#be7039}
+.preview-controls{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:14px 0 10px}.segmented{display:flex;background:#16181c;border:1px solid #303139;border-radius:8px;padding:3px;gap:2px}.segmented button{border:0;background:transparent;color:#888e98;font-size:10px;font-weight:650;padding:7px 13px;border-radius:5px}.segmented button.active{background:#353036;color:#ffbb87;box-shadow:0 1px 4px #0004}.switch-label{display:flex;gap:8px;align-items:center;color:#aeb0b9;font-size:10px;cursor:pointer;user-select:none}.switch-label input{appearance:none;margin:0;width:28px;height:16px;border-radius:20px;background:#34353c;position:relative;transition:.2s;cursor:pointer}.switch-label input::after{content:'';position:absolute;width:10px;height:10px;background:#b4b5bc;border-radius:50%;top:3px;left:3px;transition:.2s}.switch-label input:checked{background:#a55627}.switch-label input:checked::after{left:15px;background:white}.codebox{border:1px solid #292c32;border-radius:11px;background:#101217;overflow:hidden}.codebox-header{background:#191b21;border-bottom:1px solid #2b2d34;padding:9px 11px;display:flex;align-items:center;justify-content:space-between;gap:10px}.codebox-header .left{display:flex;align-items:center;gap:7px;color:#b6b9c1;font-size:10px}.circle-icon{width:7px;height:7px;background:var(--orange);border-radius:50%}.mono{font-family:var(--mono)}.copy-btn{border:0;background:transparent;color:#8e949e;display:flex;align-items:center;gap:6px;font-size:10px;padding:2px 3px}.copy-btn:hover{color:#ffb17c}.code-json{margin:0;padding:13px 15px 16px;font:var(--json-size)/1.85 var(--mono);color:#b6b9c2;min-height:242px;overflow:auto;tab-size:2;white-space:pre}.j-key{color:#ffb27d}.j-str{color:#a4dcb9}.j-num{color:#e6abef}.j-bool{color:#9dbeff}.json-warn{background:#4d281e;box-shadow:0 0 0 2px #4d281e;border-radius:3px}.code-footer{border-top:1px solid #292b31;padding:9px 11px;display:flex;align-items:center;justify-content:space-between;color:#777d86;font-size:9px;gap:10px}.warn-inline{display:flex;align-items:start;gap:10px;padding:12px;border:1px solid #67432a;border-radius:9px;background:#251a15;color:#d8ab91;font-size:10px;line-height:1.55;margin-top:12px}.warn-inline.good{border-color:#245943;background:#11251e;color:#9bdfbc}.warn-inline .warn-icon{color:#ffb56f;font-size:15px}.warn-inline.good .warn-icon{color:#67d6a2}.bottom-metrics{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:13px}.metric{border:1px solid #292b31;background:#15161b;border-radius:9px;padding:10px}.metric b{font-size:15px;display:block;font-weight:700;letter-spacing:-.04em}.metric small{display:block;color:#7b818b;font-size:9px;margin-top:5px}.metric b.orange{color:var(--orange)}.metric b.green{color:var(--green)}
+.search-hero h2,.compare-hero h2,.details-hero h2{margin:5px 0 8px;font-size:19px;letter-spacing:-.04em;font-weight:750}.lead{font-size:11px;line-height:1.65;color:#8e939d;margin:0 0 15px}.source-tabs{display:flex;background:#17181d;padding:3px;border:1px solid #303138;border-radius:9px;gap:3px;margin-bottom:13px}.source-tabs button{flex:1;background:transparent;border:0;border-radius:6px;padding:9px;color:#8b929d;font-size:11px;font-weight:600}.source-tabs button.active{color:#ffb784;background:#33241d}.input-label{font-size:10px;color:#b8bbc3;font-weight:600;display:block;margin-bottom:8px}.input-area{width:100%;min-height:133px;resize:vertical;background:#121419;border:1px solid #303139;border-radius:8px;padding:12px;color:#dae1da;font:11px/1.7 var(--mono);outline:none}.input-area:focus{border-color:#bc6a33}.hint{color:#6f7580;font-size:10px;line-height:1.55;margin-top:8px}.row-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}.primary{border:1px solid #ff9855;border-radius:8px;background:linear-gradient(130deg,#ffac69,#f47a31);padding:10px 14px;color:#261209;font-size:11px;font-weight:800;box-shadow:0 4px 20px #ee712524}.primary:hover{filter:brightness(1.09)}.secondary{border:1px solid #3b3b43;background:#1b1d22;color:#d2d4da;border-radius:8px;padding:9px 11px;font-size:11px;font-weight:600}.secondary:hover{background:#29292e;border-color:#74482f}.linkish{border:0;background:transparent;color:#ffa66d;font-size:11px}.divrow{border-top:1px solid #282a31;margin:18px 0 15px}.results-label{display:flex;justify-content:space-between;align-items:center;gap:5px}.count{background:#282019;color:#ffab75;border:1px solid #5c3c28;border-radius:6px;padding:4px 7px;font-size:10px}.match-category{color:#9297a2;font-size:9px;letter-spacing:.13em;font-weight:800;margin:17px 0 9px}.match-card{border:1px solid #353038;background:linear-gradient(145deg,#1d1b1c,#13151a 70%);border-radius:11px;padding:12px 12px 9px;margin:8px 0}.match-name{font-weight:700;font-size:12px;letter-spacing:-.02em}.match-route{font:10px/1.5 var(--mono);color:#8b8e97;margin:7px 0}.match-score{margin-left:auto;text-align:right;color:#ffb780;font-size:16px;font-weight:850;letter-spacing:-.05em}.score-caption{font-size:9px;color:#888d98;font-weight:500;letter-spacing:0}.scorebar{height:5px;background:#2e2d32;border-radius:5px;overflow:hidden;margin:10px 0}.scorebar span{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,#e86a2e,#ffb473)}.match-evidence{font-size:10px;line-height:1.75;color:#9a9fa8}.match-evidence span{color:var(--green)}.match-details{padding:9px 0;color:#b2b5bc;line-height:1.6;font-size:10px}.match-details pre{font:10px/1.65 var(--mono);background:#101216;border:1px solid #343036;padding:10px;overflow:auto;border-radius:7px;color:#e1c8b2}.match-footer{border-top:1px solid #353036;margin-top:10px;padding-top:9px;display:flex;gap:8px;flex-wrap:wrap}.card-btn{padding:7px 9px;background:#282329;border:1px solid #44393a;border-radius:6px;color:#c6c3c6;font-size:10px}.card-btn:hover{color:#ffb27c;border-color:#955734}.card-btn.highlight{color:#ffb27c}
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.compare-small{min-width:0;background:#15171c;border:1px solid #303139;border-radius:8px;padding:11px}.compare-small b{display:block;font-size:10px;margin-bottom:5px}.compare-small small{color:#848c96;font-size:9px}.compare-small .value{font:10px/1.65 var(--mono);color:#c2c3c8;margin-top:9px;overflow-wrap:anywhere}.compare-text{width:100%;min-height:160px;background:#111318;color:#ccd5ca;border:1px solid #36363b;border-radius:9px;padding:11px;font:10px/1.7 var(--mono);resize:vertical}.findings{margin-top:11px}.finding{display:flex;align-items:flex-start;gap:9px;border:1px solid #40352e;background:#211a16;border-radius:9px;padding:11px;margin:8px 0;font-size:10px;line-height:1.6;color:#d2b6a3}.finding.ok{border-color:#29513f;background:#13251d;color:#a6dbbb}.finding .level{font-size:9px;font-weight:750;letter-spacing:.05em;padding:3px 5px;border-radius:4px;color:#ffbb7f;background:#4a3021}.finding.ok .level{color:#86dfb0;background:#244431}.big-score{font-size:26px;letter-spacing:-.07em;font-weight:830;color:#ffb17a}.result-head{display:flex;align-items:center;justify-content:space-between;margin-top:12px}.result-caption{font-size:10px;color:#999da5}.details-list{display:grid;gap:8px}.detail-row{padding:11px;border:1px solid #303139;background:#15171b;border-radius:9px}.detail-row label{display:block;color:#878c95;font-size:9px;letter-spacing:.07em;text-transform:uppercase;margin-bottom:7px}.detail-row div{font-size:11px;color:#d3d6de;line-height:1.6}.detail-row em{color:#ffb078;font-style:normal}.details-code{font:11px/1.6 var(--mono);color:#c4cad0;white-space:pre-wrap}
+.statusbar{height:25px;background:#14151a;border-top:1px solid #2b2d31;padding:0 13px;display:flex;align-items:center;justify-content:space-between;gap:15px;color:#8c929c;font-size:10px}.status-left,.status-right{gap:13px;min-width:0}.status-left span{white-space:nowrap}.status-or{color:var(--orange)}
+.toast{position:fixed;bottom:42px;right:35px;padding:11px 14px;background:#29211c;border:1px solid #a4582c;box-shadow:0 15px 50px #000a;border-radius:9px;color:#ffe1c9;font-size:12px;opacity:0;pointer-events:none;transform:translateY(9px);transition:.2s;max-width:340px;z-index:30}.toast.show{opacity:1;transform:none}
+.modal-bg{position:fixed;inset:0;z-index:20;background:#000b;backdrop-filter:blur(7px);display:none;align-items:center;justify-content:center;padding:22px}.modal-bg.show{display:flex}.modal{width:min(560px,100%);max-height:85vh;overflow:auto;background:#15161a;border:1px solid #5b4032;border-radius:15px;box-shadow:0 32px 100px #000c}.modal-head{display:flex;align-items:center;justify-content:space-between;padding:17px 19px;border-bottom:1px solid #303136}.modal-head h3{margin:0;font-size:17px;letter-spacing:-.04em}.modal-body{padding:18px}.setting-item{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:12px 0;border-bottom:1px solid #2b2d32}.setting-item:last-child{border-bottom:0}.setting-item b{font-size:12px}.setting-item small{display:block;color:#868b96;margin-top:4px;font-size:10px}.setting-item select{min-width:150px;max-width:185px}.modal-foot{border-top:1px solid #2a2c32;padding:14px 19px;display:flex;justify-content:flex-end;gap:8px}.modal-note{color:#828792;font-size:11px;line-height:1.55;margin:0 0 12px}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#34363d;border-radius:10px}::-webkit-scrollbar-track{background:transparent}
+@media(max-width:1300px){.sidebar{width:185px}.lens{width:455px}.code-line{font-size:11px}.terminal{height:112px}}@media(max-width:1100px){.sidebar{display:none}.lens{width:445px}.toolbar .crumb{display:none}}@media(max-width:770px){.layout{height:auto;display:block;min-height:0}.editor{min-height:430px}.code-area{height:320px;flex:none}.terminal{display:none}.lens{width:100%;min-width:0;min-height:680px;border-left:0;border-top:2px solid #d26b30}.lens-scroll{max-height:none;overflow:visible}.titlebar .title-actions .hide-mobile{display:none}.toolbar{padding:0 10px}.statusbar{position:relative}.section{padding:16px}.lens-name{font-size:19px}.nav button{font-size:10px}}@media(max-width:460px){.chip-top{display:none}.endpoint-controls{flex-wrap:wrap}.pin{padding:9px}.compare-grid{grid-template-columns:1fr}.title-caption{font-size:10px}.titlebar{padding:0 10px}}
+
+
+/* JSON Lens UX Validation Lab v2 — Orange Ember */
+:root{--info-size:13px;--curl-size:12px;--info-font:'Inter','Segoe UI',system-ui,sans-serif;--curl-font:'JetBrains Mono',Consolas,monospace;--json-font:'JetBrains Mono',Consolas,monospace;--json-size:15px}
+.nav{grid-template-columns:repeat(5,minmax(0,1fr));gap:2px;padding-left:9px;padding-right:9px}.nav button{font-size:9px;gap:3px}
+.lens{width:clamp(435px,41vw,625px)}.lab-mini-note{display:block;color:#6e747c;font-size:10px;margin-top:6px;line-height:1.4}.lab-row{display:flex;align-items:center;justify-content:space-between;margin:13px 0 9px;gap:9px}.lab-stamp{font:9px var(--mono);color:#cb925f;background:#2a201a;border:1px solid #55402e;border-radius:5px;padding:5px 7px}.lab-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.lab-mini-card{padding:11px;border:1px solid #303136;border-radius:9px;background:#15171b;min-width:0}.lab-mini-card strong{display:block;font-size:11px;color:#e3dcd5;margin-bottom:7px}.lab-mini-card span{display:block;font-size:10px;color:#969ba4;line-height:1.6}.lab-source-state{color:#777f8b;font-size:10px;line-height:1.5;margin:-3px 0 10px}.lab-search-split{margin-top:12px;border:1px solid #303037;border-radius:11px;overflow:hidden;background:#111216}.lab-search-entry{height:300px;overflow:auto;padding:12px}.lab-search-results{min-height:220px;max-height:540px;overflow:auto;padding:13px 12px 15px}.lab-drag-handle{height:20px;background:#242126;border-block:1px solid #443126;cursor:row-resize;display:flex;align-items:center;justify-content:center;gap:8px;color:#ffad70;user-select:none}.lab-drag-handle span{height:3px;width:18px;border-top:1px solid #8d5435;border-bottom:1px solid #8d5435}.lab-drag-handle small{font-size:9px}.lab-footnote{font-size:10px;color:#86878d;line-height:1.6;margin-top:11px}.lab-pretty-head{display:flex;justify-content:space-between;gap:8px;margin-top:13px;color:#9e9ba1;font:9px var(--mono)}.lab-json-preview{overflow:auto;max-height:260px;min-height:40px;background:#0d0f12;border:1px solid #303036;border-radius:8px;padding:11px 12px;font:var(--json-size)/1.7 var(--json-font);color:#cbd2d7;white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0}.lab-sample-panel{background:#17191e;border:1px solid #373139;border-radius:9px;padding:11px 12px;margin:13px 0}.lab-flex{display:flex;align-items:center;gap:8px;min-width:0}.lab-flex .select{flex:1;min-width:0}.lab-compare-mode{margin-top:11px;flex-wrap:wrap}.lab-toggle{background:#212124;border:1px solid #3a3634;color:#a2a4aa;border-radius:6px;padding:7px 10px;font-size:10px}.lab-toggle.active{color:#ffb47b;background:#3a261e;border-color:#8f4f2d}.lab-preset-tag{margin-left:auto;font:9px var(--mono);color:#bd9d8b}.lab-livebar{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:9px;color:#a9ae9a;gap:10px}.lab-livebar span:last-child{color:#686e77}.lab-callout{background:#161718;border:1px solid #363438;border-left:3px solid #dd793e;padding:11px;border-radius:7px;color:#a8adb7;font-size:10px;line-height:1.7;margin:12px 0}.lab-score-context{display:flex;flex-direction:column;align-items:end;gap:4px;font-size:9px;letter-spacing:.07em;color:#bfa792}.lab-score-context small{font-size:9px;color:#80858d;letter-spacing:normal}.lab-extra-section{border-top:1px solid #2a2b30;padding-top:18px;margin-top:20px}.lab-chip-row{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}.lab-chip-row span{font:10px var(--mono);color:#e1ae8b;background:#2d211c;border:1px solid #65402c;border-radius:5px;padding:6px 8px}.lab-model-caption{font:10px var(--mono);color:#ffbd83;line-height:1.6}.lab-model-notes{font-size:10px;color:#9a9ba4;line-height:1.65}.lab-mapping-find{font-size:11px;line-height:1.6;padding:11px;border-radius:7px;background:#1e201d;border:1px solid #42443a;color:#e5ba8b}.lab-limit-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:11px}.lab-limit-grid div{background:#1b1b1e;padding:9px;border:1px solid #373134;border-radius:7px;font-size:10px;line-height:1.6;color:#9da2ab}.lab-coverage-item{padding:11px 10px;background:#16171c;border:1px solid #303034;border-radius:9px;margin:9px 0}.lab-coverage-top{display:flex;align-items:start;justify-content:space-between;gap:9px}.lab-coverage-top b{font-size:11px;font-weight:650}.lab-coverage-item p{margin:7px 0 9px;font-size:10px;color:#9298a3;line-height:1.5}.lab-coverage-tags{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.lab-status{padding:5px 7px;border-radius:5px;font:9px var(--mono);white-space:nowrap;background:#2d251c;color:#e7b586;border:1px solid #624628}.lab-status.implemented{background:#1d302b;color:#80d4b1;border-color:#2b6754}.lab-status.native{background:#252831;color:#9eabd8;border-color:#3d4663}.lab-coverage-item .secondary{font-size:9px;padding:6px 9px}.lab-coverage-item label{color:#8f949e;font-size:10px;display:flex;align-items:center;gap:5px}.lab-coverage-item input{accent-color:var(--orange)}.lab-coverage-progress{margin:14px 0;padding:11px;background:#201a17;border:1px solid #4a3326;border-radius:8px;color:#c7c0bc;font-size:11px}.lab-editor-label{color:#ffbd8e}
+#javaEdit{flex:1;background:#111318;color:#cbd2df;border:0;padding:15px 17px;min-height:260px;resize:none;font:12px/1.8 var(--mono);tab-size:4}#javaEdit:focus{outline:0}#javaEdit.incomplete{background:#241b1c}.code-json{font-family:var(--json-font)!important;font-size:var(--json-size)!important}.compare-text{font-family:var(--json-font);font-size:var(--json-size)}#curlText{font-family:var(--curl-font);font-size:var(--curl-size)}.lens{font-family:var(--info-font)}.lens .lead,.lens .hint,.lens .detail-row,.lab-mini-card,.lab-limit-grid{font-size:calc(var(--info-size) * .82)}
+[data-theme='midnight']{--bg:#030508;--chrome:#070b12;--surface:#0b111a;--orange:#35d6e8;--orange2:#86e4eb;--orange-soft:#35d6e81c}[data-theme='base16']{--bg:#181818;--chrome:#1f2020;--surface:#242424;--orange:#7cafc2;--orange2:#b8d6df;--orange-soft:#7cafc222}[data-theme='ocean']{--bg:#081521;--chrome:#0d2030;--surface:#122b3f;--orange:#4cc9f0;--orange2:#99e2f9;--orange-soft:#4cc9f01d}[data-theme='ember']{--orange:#ff7b2f;--orange2:#ffa65d;--orange-soft:#ff7b2f20}
+@media(max-width:1100px){.lens{width:470px}}@media(max-width:770px){.lens{width:100%}.lab-search-entry{height:320px}}
+
+
+.nav button{transition:none!important}.nav button:not(.active){box-shadow:none!important}
+#searchEntry>.row-actions:last-child{position:sticky;bottom:-12px;z-index:3;padding:10px 3px 12px;margin:0 -2px -12px;background:linear-gradient(0deg,#161518 78%,#161518e8);border-top:1px solid #343036}
+[data-theme='midnight'] .lens,[data-theme='base16'] .lens,[data-theme='ocean'] .lens{background:var(--bg)}
+[data-theme='midnight'] .lens-header,[data-theme='base16'] .lens-header,[data-theme='ocean'] .lens-header{background:linear-gradient(130deg,var(--chrome),var(--surface))}
+[data-theme='midnight'] .nav,[data-theme='base16'] .nav,[data-theme='ocean'] .nav{background:var(--chrome)}
+[data-theme='midnight'] .nav button.active,[data-theme='base16'] .nav button.active,[data-theme='ocean'] .nav button.active{background:var(--orange-soft);color:var(--orange);box-shadow:inset 0 -2px var(--orange)}
+[data-theme='midnight'] .primary,[data-theme='base16'] .primary,[data-theme='ocean'] .primary{background:var(--orange);color:#061015}
+[data-theme='midnight'] .small-action,[data-theme='base16'] .small-action,[data-theme='ocean'] .small-action{color:var(--orange)}
+[data-theme='midnight'] .lens-name span,[data-theme='base16'] .lens-name span,[data-theme='ocean'] .lens-name span{color:var(--orange)}
+
+
+/* JSON Lens isolated dock: preserves the v2 dark/orange design exactly. */
+:root {color-scheme:dark}
+html,body{width:100%;height:100%;min-height:100%;}
+body{display:flex;align-items:center;justify-content:center;padding:18px;background:radial-gradient(ellipse at 50% 0%, #1a1615 0%,#0a0a0e 48%,#060709 100%);overflow:hidden;}
+.plugin-shell{width:min(100%,570px);height:min(920px,calc(100dvh - 36px));min-height:0;display:flex;min-width:0;}
+.plugin-shell>.lens{width:100%;height:100%;min-width:0;min-height:0;border:1px solid #342e2c;border-radius:14px;overflow:hidden;box-shadow:0 28px 100px rgba(0,0,0,.55),0 0 40px #ff7b2f09;}
+.lens{flex:1;min-width:0}
+.lens-scroll{overflow-x:hidden;overflow-y:auto;min-height:0;max-height:none}
+.section{min-width:0}
+.lens [hidden]{display:none!important}
+.lens, .lens *{max-width:100%;}
+.lens *{min-width:0}
+.lens .code-json,.lens .lab-json-preview,.lens pre{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
+.lens .endpoint-route,.lens .endpoint-meta,.lens .lab-mini-card,.lens .lab-small-note,.lens .lab-source-state,.lens .compare-small,.lens .details-list,.lens .detail-row,.lens .finding,.lens .match-card,.lens .lab-callout,.lens .lab-mini-note,.lens .warn-inline,.lens .hint,.lens .lead,.lens .metric,.lens .count,.lens .input-label,.lens p,.lens span,.lens small {overflow-wrap:anywhere;}
+.lens .nav{grid-template-columns:repeat(5,minmax(0,1fr));gap:3px}
+.lens .nav button{min-width:0;flex-direction:column;gap:5px;white-space:normal;line-height:1.2;padding:9px 2px;font-size:10px}
+.lens .nav button svg{width:15px;height:15px}
+.lens .line-top{flex-wrap:wrap}
+.lens .section{padding:17px 17px 22px}
+.lens .endpoint-controls,.lens .row-actions,.lens .preview-controls,.lens .lab-flex{flex-wrap:wrap}
+.lens .codebox-header,.lens .result-head,.lens .results-label{flex-wrap:wrap}
+.lens .compare-grid>*{min-width:0}
+.lens .match-footer{flex-wrap:wrap}
+.lens .match-card,.lens .match-details,.lens .detail-row,.lens .compare-small{overflow:hidden}
+.lens .lab-search-split,.lens .lab-search-entry,.lens .lab-search-results{min-width:0}
+.lens .lab-search-entry{height:395px}
+.lens .lab-drag-handle {touch-action:none}
+.lens textarea,.lens input,.lens select {max-width:100%}
+.lens .lab-json-preview{max-height:260px;overflow:auto}
+.lens .lab-mini-card{overflow:hidden}
+.lens .fixture-accordion{border:1px solid #4f372c;background:#161517;border-radius:12px;margin-top:19px;overflow:hidden}
+.lens .fixture-accordion summary{cursor:pointer;display:flex;justify-content:space-between;gap:10px;align-items:center;padding:13px 12px;color:#eee0d7;font-size:11px;font-weight:650;list-style:none}
+.lens .fixture-accordion summary::-webkit-details-marker{display:none}
+.lens .fixture-accordion[open] summary{border-bottom:1px solid #3b2b25;background:#251b18}
+.lens .fixture-badge{font-size:9px;letter-spacing:.06em;color:#ffb47f;background:#3b261e;border:1px solid #66412b;padding:5px;border-radius:6px;flex:none}
+.lens .fixture-body{padding:11px;min-width:0}
+.lens .fixture-description{font-size:10px;color:#a9a1a0;line-height:1.65;margin:0 0 12px}
+.lens .fixture-tools{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}
+.lens .fixture-tools button{flex:1 1 170px;text-align:center}
+.lens .fixture-code-wrapper{border:1px solid #2e3034;border-radius:8px;background:#111216;overflow:hidden}
+.lens .fixture-code{width:100%;height:245px;max-height:245px;overflow:auto!important;padding:10px 0;background:#111216}
+.lens .fixture-code .code-line{white-space:pre;min-width:max-content;font-size:10px;line-height:20px;min-height:20px}
+.lens .fixture-code .ln{width:36px;padding-right:8px}
+.lens #javaEdit{width:100%;height:245px;display:block;resize:vertical;background:#111216;color:#e1d4ca;border:0;padding:12px;font:11px/1.65 var(--mono);outline:0}
+.lens #javaEdit[style*="none"]{display:none!important}
+.lens .fixture-end{padding-top:9px;display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;font-size:9px;color:#8d929a}
+/* Compact enough to fit 360-400 px dock widths, including zoom/font preferences */
+@media (max-width:760px){
+ body{padding:0;overflow:hidden}
+ .plugin-shell{width:100%;height:100dvh}
+ .plugin-shell>.lens{border:0;border-radius:0;box-shadow:none;min-height:0;}
+ .lens-scroll{max-height:none;overflow-y:auto}
+ .lens .section{padding:15px 13px 25px}
+ .lens .lens-header{padding:15px 13px}
+ .lens .endpoint-controls{flex-wrap:wrap}
+ .lens .endpoint-controls .select{flex:1 1 175px}
+ .lens .endpoint-controls .pin{flex:0 0 auto;padding:9px 12px}
+ .lens .compare-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:390px){
+ .lens .nav button{font-size:9px}
+ .lens .preview-controls{align-items:flex-start}
+ .lens .compare-grid{grid-template-columns:1fr}
+ .lens .brand-right{gap:4px}
+ .lens .code-footer{flex-wrap:wrap}
+ .lens .bottom-metrics{grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+ .lens .metric{padding:7px}
+ .lens .metric b{font-size:12px}
+ .lens .lab-preset-tag{max-width:100%}
+}
+</style></head>
+<body>
+<main class="plugin-shell" aria-label="Prévia do plugin JSON Lens"><section aria-label="JSON Lens tool window" class="lens"><div class="lens-header"><div class="brandline"><div class="brand-glyph"><svg class="ico" height="22" style="width:22px;height:22px;stroke-width:2.3" width="22"><circle cx="10" cy="10" r="5"></circle><path d="m14 14 6 6M8 8h4m-2-2v4"></path></svg></div><div><div class="lens-name">JSON <span>Lens</span></div><div class="lens-sub">Live API Contracts <span style="color:#5c5d66">/</span> IntelliJ IDEA</div></div><div class="brand-right"><button aria-label="Configurações" class="round-btn" onclick="openSettings()" title="Configurações"><span data-icon="settings"></span></button><button aria-label="GitHub" class="round-btn" onclick="window.open('https://github.com/codewesleylima/Json-Lens','_blank')" title="GitHub"><span data-icon="github"></span></button></div></div><div class="live-strip"><div class="live-indicator" id="syncStatus">Live sync · alterações monitoradas</div><span class="tag">CONCEITO UI • DEMO</span></div></div>
+<nav aria-label="Seções JSON Lens" class="nav"><button class="active" data-view="preview" onclick="navigate('preview')"><span data-icon="braces"></span> Preview</button><button data-view="search" onclick="navigate('search')"><span data-icon="search"></span> Localizar</button><button data-view="compare" onclick="navigate('compare')"><span data-icon="git-compare"></span> Contratos</button><button data-view="details" onclick="navigate('details')"><span data-icon="list"></span> Detalhes</button><button data-view="coverage" onclick="navigate('coverage')" title="Matriz de cobertura funcional"><span data-icon="list"></span>Cobertura</button></nav>
+<div class="lens-scroll" id="lensScroll">
+<div class="view section" id="view-preview">
+<div class="line-top"><div class="section-kicker">01   /   ENDPOINT SELECIONADO</div><span class="lab-mini-note">Fluxo real no IntelliJ: cursor → endpoint → DTO → JSON. Aqui: fixture Java demonstrativa.</span><span style="font-size:10px;color:#777c84">Acompanhando o editor</span></div>
+<div class="endpoint-card"><div class="endpoint-top"><span class="http-pill" id="httpBadge">POST</span><span style="font-size:10px;color:#a1a5ae">application/json</span><span class="role-pill" id="directionBadge">OUTBOUND · FEIGN</span></div><div class="endpoint-route" id="endpointRoute">/v1/acervo/livros</div><div class="endpoint-meta" id="endpointMeta">BibliotecaClient  ·  criar(LivroParaBiblioteca)</div><div class="endpoint-controls"><select aria-label="Selecionar método" class="select" id="methodSelect" onchange="chooseEndpoint(this.value)"><option value="feign">BibliotecaClient · criar()</option><option value="controller">LivroController · cadastrar()</option></select><button class="pin" id="pinBtn" onclick="togglePin()">♧   Fixar</button></div></div>
+<div class="preview-controls"><div aria-label="Visualização JSON" class="segmented" role="tablist"><button class="active" id="reqTab" onclick="choosePayload('request')">Request</button><button id="resTab" onclick="choosePayload('response')">Response</button></div><label class="switch-label"><input id="schemaToggle" onchange="renderPreview()" type="checkbox"/><span>Mostrar schema</span></label></div>
+<div class="codebox"><div class="codebox-header"><div class="left"><span class="circle-icon"></span><strong id="codeboxTitle">request.json</strong><span style="color:#747b83">· gerado localmente</span></div><button class="copy-btn" onclick="copyPayload()"><span data-icon="copy"></span> Copiar</button></div><pre class="code-json" id="jsonPreview"></pre><div class="code-footer"><span id="previewFileInfo">4 propriedades · exemplo ilustrativo</span><span id="previewStatus">● JSON sincronizado</span></div></div>
+<div class="warn-inline" id="previewWarning"><span class="warn-icon">⚠</span><div id="warningMessage"><strong>Divergência potencial no contrato</strong><br/>O cliente declara <code>codigoIsbn</code>, enquanto a API receptora espera <code>isbn</code>.</div></div>
+<div class="lab-row"><div class="section-kicker">AÇÕES DE INSPEÇÃO</div><div class="lab-stamp">JAVA PSI · DEMO</div></div><div class="lab-grid"><div class="lab-mini-card"><strong>Reconhecimento de anotações</strong><span>@RestController · @Controller · @FeignClient · @Get/Post/Put/Patch/Delete/RequestMapping</span></div><div class="lab-mini-card"><strong>Assinatura e wrappers</strong><span>RequestBody → DTO · ResponseEntity / HttpEntity / Mono / Flux / CompletableFuture</span></div></div><div class="bottom-metrics"><div class="metric"><b class="green">350 ms</b><small>Debounce PSI</small></div><div class="metric"><b>2</b><small>Direções da API</small></div><div class="metric"><b class="orange">100% local</b><small>Sem envio de código</small></div></div>
+<div class="row-actions"><button class="secondary" onclick="navigate('compare')" style="flex:1">Comparar com contrato <span data-icon="arrow-right"></span></button><button class="secondary" onclick="navigate('details')" style="flex:1">Ver detalhes</button></div>
+
+<details class="fixture-accordion" id="dtoFixture">
+<summary><span>✦ Testar atualização do DTO</span><span class="fixture-badge">LAB · JAVA SIMULADO</span></summary>
+<div class="fixture-body">
+<p class="fixture-description">Edite apenas o <code>@JsonProperty</code> de exemplo. O JSON e o comparador serão atualizados na interface após 350 ms. Este editor faz parte exclusivamente da demonstração HTML.</p>
+<div class="fixture-tools">
+<button class="secondary" id="fixDtoBtn" onclick="toggleDto()">✦ Simular correção @JsonProperty</button>
+<button class="secondary" id="editJavaBtn" onclick="toggleJavaEditor()">✎ Editar Java de exemplo</button>
+</div>
+<div class="fixture-code-wrapper">
+<div class="code-area fixture-code" id="javaCode"></div>
+<textarea aria-label="Editor Java do laboratório" id="javaEdit" placeholder="Modifique o @JsonProperty para isbn..." spellcheck="false" style="display:none"></textarea>
+</div>
+<div class="fixture-end"><span>Exemplo: <strong>BibliotecaClient.java</strong></span><span>Sem execução do código Java</span></div>
+</div>
+</details>
+</div>
+<div class="view section" hidden="" id="view-search">
+<div class="section-kicker">02   /   PROJECT SCAN</div><div class="search-hero"><h2>Localizar interação<span style="color:var(--orange)">.</span></h2><p class="lead">Cole um cURL ou carregue uma collection Postman/Insomnia. Encontre controllers que recebem e clientes Feign que enviam requisições semelhantes.</p></div>
+<div class="lab-search-split" id="searchSplit"><div class="lab-search-entry" id="searchEntry"><div class="source-tabs"><button class="active" id="sourceCurlTab" onclick="chooseSource('curl')">⌘   cURL</button><button id="sourceCollectionTab" onclick="chooseSource('collection')">▤   Collection</button></div><div class="lab-source-state" id="sourceCacheStatus">A busca cURL e a busca por collection mantêm históricos independentes nesta demonstração.</div>
+<div id="sourceCurl"><label class="input-label" for="curlText">Comando cURL</label><textarea class="input-area" id="curlText" placeholder="curl -X POST https://api... -d '{...}'" spellcheck="false"></textarea><div class="hint">O conteúdo é interpretado apenas para comparação. Nenhuma chamada HTTP é executada.</div><div class="row-actions"><label class="secondary" style="cursor:pointer">Abrir .txt / .curl <input accept=".txt,.curl,text/plain" hidden="" id="curlFile" onchange="loadCurlFile(this)" type="file"/></label><button class="linkish" onclick="loadCurlExample()">Usar exemplo</button></div></div>
+<div hidden="" id="sourceCollection"><label class="input-label">Collection importada</label><div class="compare-small" style="margin-bottom:10px"><b id="collectionName">Nenhuma collection carregada</b><small id="collectionInfo">Suporta export JSON de Postman v2.1 e Insomnia</small></div><label class="secondary" style="cursor:pointer;display:inline-block">Carregar collection JSON… <input accept=".json,application/json" hidden="" id="collectionFile" onchange="loadCollectionFile(this)" type="file"/></label><div class="hint">Os requests são analisados estaticamente, sem execução.</div><div class="row-actions" style="margin-top:9px"><button class="secondary" onclick="loadSampleCollection('postman')">Exemplo Postman v2.1</button><button class="secondary" onclick="loadSampleCollection('insomnia')">Exemplo Insomnia</button></div><div class="lab-pretty-head"><span>PRÉVIA JSON · FORMATADA</span><span class="count" id="collectionCount">0 requests</span></div><pre class="lab-json-preview" id="collectionPreview">Nenhuma collection selecionada.</pre></div>
+<div class="row-actions"><button class="primary" onclick="runSearch()" style="flex:1"><span data-icon="search"></span>   Localizar no código</button></div>
+</div><div aria-label="Arraste para redimensionar os painéis" aria-orientation="horizontal" class="lab-drag-handle" id="searchDivider" role="separator" tabindex="0"><span></span><small>Arraste para redimensionar</small><span></span></div><div class="lab-search-results" id="searchResultsPane"><div class="divrow"></div><div class="results-label"><span class="section-kicker">MATCH SCORE   /   HEURÍSTICO</span><span class="count" id="resultCount">Exemplo pronto</span></div><p class="hint" id="scanSummary">Execute a busca para inspecionar candidatos locais.</p><div id="resultsHolder"></div>
+</div></div><p class="lab-footnote">Ranking = semelhança com uma requisição. Aderência = comparação estrutural do contrato. Nenhuma porcentagem comprova execução em runtime.</p></div>
+<div class="view section" hidden="" id="view-compare">
+<div class="section-kicker">03   /   CONTRACT CHECK</div><div class="compare-hero"><h2>Aderência de contrato<span style="color:var(--orange)">.</span></h2><p class="lead">Compare o payload declarado no projeto com o contrato esperado pelo receptor. O exemplo já traz a divergência <code>codigoIsbn</code> × <code>isbn</code> do repositório.</p></div><div class="lab-sample-panel"><label class="input-label" for="contractPreset">Carregar exemplo de contrato</label><div class="lab-flex"><select class="select" id="contractPreset" onchange="useContractPreset(this.value)"><option value="schema">JSON Schema · Biblioteca</option><option value="example">JSON de exemplo</option><option value="openapi-yaml">OpenAPI 3.x · Biblioteca (YAML)</option><option value="openapi-json">OpenAPI 3.x · Biblioteca (JSON)</option><option value="refs">JSON Schema · $ref local / allOf</option><option value="oneof">JSON Schema · oneOf (limitação)</option></select><button class="secondary" onclick="useContractPreset(document.getElementById('contractPreset').value)">Carregar</button></div><div class="lab-flex lab-compare-mode"><span class="input-label">Comparar:</span><button class="lab-toggle active" id="compareRequestTab" onclick="selectCompareMode('request')">Request</button><button class="lab-toggle" id="compareResponseTab" onclick="selectCompareMode('response')">Response</button><span class="lab-preset-tag" id="contractSourceType">JSON Schema</span></div></div>
+<div class="compare-grid"><div class="compare-small"><b>↗   Projeto / Java</b><small id="compareActualLabel">BibliotecaClient.criar()</small><div class="value" id="actualFields">titulo<br/>autor<br/>anoPublicacao<br/>codigoIsbn</div></div><div class="compare-small"><b>⇥   Receptor / JSON Schema</b><small>Contrato externo carregado</small><div class="value" id="expectedFields">titulo<br/>autor<br/>anoPublicacao<br/>isbn</div></div></div>
+<div style="margin-top:16px"><label class="input-label" for="contractInput">Contrato fornecido · JSON, JSON Schema ou OpenAPI (JSON/YAML)</label><textarea class="compare-text" id="contractInput" oninput="scheduleLiveCompare()" spellcheck="false"></textarea><div class="lab-livebar"><span id="liveCompareStatus">● Comparação local pronta</span><span>Debounce 350ms · sem rede</span></div><p class="hint">A comparação é executada localmente no HTML para um subconjunto de JSON Schema/OpenAPI. Os percentuais são ilustrativos; a engine completa do plugin Java não está sendo executada.</p><div class="row-actions"><button class="primary" onclick="compareContracts()">Validar contrato</button><button class="secondary" onclick="resetContract()">Restaurar exemplo</button></div></div>
+<div class="result-head"><div><span class="section-kicker">RESULTADO DA VALIDAÇÃO</span><div class="result-caption" id="scoreDescription" style="margin-top:7px">Comparação estática ilustrativa</div></div><div class="lab-score-context"><span>ADERÊNCIA ESTIMADA</span><small>Não é match score</small></div><div class="big-score" id="contractScore">—</div></div><div class="findings" id="contractFindings"></div><div class="lab-callout" id="contractCaveats">Escopo: análise estrutural estática. Regras avançadas e serialização customizada podem ficar fora da inferência.</div>
+</div>
+<div class="view section" hidden="" id="view-details">
+<div class="section-kicker">04   /   INSPECTION</div><div class="details-hero"><h2>Detalhes técnicos<span style="color:var(--orange)">.</span></h2><p class="lead">Metadados do endpoint selecionado, parâmetros identificados e limites conhecidos da análise estática.</p></div><div class="details-list">
+<div class="detail-row"><label>Assinatura atual</label><div class="mono" id="detailSignature">BibliotecaResponse criar(LivroParaBiblioteca request)</div></div>
+<div class="detail-row"><label>Direção da integração</label><div id="detailDirection">OUTBOUND · cliente OpenFeign</div></div>
+<div class="detail-row"><label>HTTP / rota</label><div class="mono" id="detailRoute">POST /v1/acervo/livros</div></div>
+<div class="detail-row"><label>Resolução do payload</label><div>DTOs e records, <em>@JsonProperty</em>, validações e tipos de retorno tratados via análise PSI Java.</div></div>
+<div class="detail-row"><label>Atualização</label><div>O plugin original acompanha modificações do projeto, com debounce aproximado de <em>350 ms</em> e reanálise em background.</div></div>
+<div class="detail-row"><label>Precisão e privacidade</label><div>Sem chamadas de IA ou upload de código. Aderência e matches são heurísticos e <strong>não comprovam o HTTP efetivamente enviado em runtime</strong>.</div></div>
+</div><div class="row-actions"><button class="secondary" onclick="navigate('preview')">Voltar ao JSON</button><button class="secondary" onclick="navigate('search')">Localizar integrações</button></div>
+<div class="lab-extra-section"><div class="section-kicker">PARÂMETROS E ANOTAÇÕES</div><div class="lab-chip-row"><span>@RequestBody</span><span>@PathVariable</span><span>@RequestParam</span><span>@RequestHeader</span></div><div class="lab-mini-card"><strong>Caminhos e métodos</strong><span>Combinação do path de classe e método, verbo HTTP, query, headers e parâmetros de rota. Nesta fixture: POST /v1/acervo/livros, @RequestBody LivroParaBiblioteca.</span></div></div>
+<div class="lab-extra-section"><div class="section-kicker">CATÁLOGO DE MODELOS · PRÉVIAS ILUSTRATIVAS</div><p class="lead">Explore o tratamento esperado de records, herança, genéricos, arrays, maps, Optional, wrappers e metadados Jackson/Validation. A resolução real depende de PSI Java.</p><select class="select" id="modelPreset" onchange="renderModelLab(this.value)"><option value="record">Record + Jackson + Bean Validation</option><option value="inherit">Herança + campos genéricos</option><option value="collection">Arrays, List, Map, Optional</option><option value="wrappers">ResponseEntity / HttpEntity / CompletableFuture / Mono / Flux</option><option value="nullable">Nullable, @JsonIgnore e enum</option></select><div class="lab-mini-card" style="margin-top:10px"><div class="lab-model-caption" id="modelCaption"></div><pre class="lab-json-preview" id="modelPreview"></pre><div class="lab-model-notes" id="modelNotes"></div></div></div>
+<div class="lab-extra-section"><div class="section-kicker">FEIGN · ORIGEM DE VALORES</div><p class="lead">O plugin busca atribuições diretas e setters antes da chamada Feign. Teste diferentes evidências estáticas no laboratório.</p><select class="select" id="mappingPreset" onchange="renderMappingLab(this.value)"><option value="ok">Atribuição direta compatível</option><option value="wrong">Campo nomeCompleto recebe idade</option><option value="suffix">idNome vs nomeId</option><option value="indirect">Mapper indireto · não comprovado</option></select><pre class="lab-json-preview" id="mappingCode"></pre><div class="lab-mapping-find" id="mappingFinding"></div></div>
+<div class="lab-extra-section"><div class="section-kicker">LIMITAÇÕES IMPORTANTES</div><div class="lab-limit-grid"><div>PSI depende de Java indexado e documento válido; edição incompleta pode atrasar a atualização.</div><div>Não verifica toda a cadeia Controller → Service → Mapper → HTTP.</div><div>Sem análise equivalente de RestTemplate, WebClient, Java HttpClient, Kotlin, Protobuf, Avro ou GraphQL.</div><div>Serialização customizada, tipos dinâmicos, referências externas e branches oneOf/anyOf podem ser incompletos.</div></div></div></div><div class="view section" hidden="" id="view-coverage">
+<div class="section-kicker">05 / VALIDATION LAB</div>
+<div class="details-hero"><h2>Matriz de cobertura<span style="color:var(--orange)">.</span></h2><p class="lead">Checklist interativo para revisar a experiência antes de levar o design ao plugin IntelliJ. <b>Simulado</b> é uma demonstração guiada, não análise real de PSI Java.</p></div>
+<div class="lab-callout">O HTML permite testar navegação, importações locais, parsing de formatos comuns, comparações demonstrativas e feedback. A leitura de projetos Java, indexação PSI, resolução de referências Java e integração com a IDE exigem a implementação nativa.</div>
+<div id="coverageList"></div>
+<div class="row-actions"><button class="primary" onclick="downloadReview()">Exportar checklist da revisão</button><button class="secondary" onclick="resetDemo()">Reiniciar demonstração</button></div>
+<div class="lab-callout" style="margin-top:14px">Privacidade neste HTML: não há chamadas de API, serviços de IA ou envio de arquivos. Os arquivos selecionados são processados no próprio navegador. As preferências são guardadas apenas no armazenamento local do navegador.</div>
+</div>
+</div></section></main>
+
+<div aria-hidden="true" hidden="" id="fixture-bridge">
+<span id="titleFile"></span><span id="toolbarFile"></span><span id="editorPath"></span>
+<button id="tabFeign"></button><button id="tabController"></button>
+<button id="fileBiblioteca"></button><button id="fileController"></button>
+<div id="terminalEvent"></div><span id="editorTip"></span>
+</div>
+
+<div aria-live="polite" class="toast" id="toast" role="status"></div>
+<div class="modal-bg" id="settingsOverlay" onclick="if(event.target===this)closeSettings()"><div aria-labelledby="settingsTitle" aria-modal="true" class="modal" role="dialog"><div class="modal-head"><h3 id="settingsTitle">Preferências do JSON Lens</h3><button class="round-btn" onclick="closeSettings()" title="Fechar">×</button></div><div class="modal-body"><p class="modal-note">As preferências são aplicadas à demonstração e salvas no navegador. No plugin nativo, são armazenadas na IDE.</p>
+<div class="setting-item"><div><b>Idioma</b><small>Rótulos principais da interface</small></div><select class="select" id="languagePref" onchange="savePreferences()"><option value="pt">Português (Brasil)</option><option value="en">English</option></select></div>
+<div class="setting-item"><div><b>Tema</b><small>Conceito laranja ou temas do repositório</small></div><select class="select" id="themePref" onchange="savePreferences()"><option value="ember">Midnight · Orange Ember (conceito)</option><option value="midnight">Midnight original</option><option value="base16">Base16</option><option value="ocean">Ocean</option></select></div>
+<div class="setting-item"><div><b>Fonte de informações</b><small>Independentemente do JSON</small></div><div class="lab-flex"><select class="select" id="infoFontPref" onchange="savePreferences()"><option value="ui">Inter / Segoe UI</option><option value="mono">JetBrains Mono</option><option value="serif">Georgia</option></select><select class="select" id="infoSizePref" onchange="savePreferences()"><option>11</option><option>12</option><option selected="">13</option><option>14</option><option>15</option><option>16</option></select></div></div>
+<div class="setting-item"><div><b>Fonte JSON</b><small>Padrão do plugin: tamanho 15</small></div><div class="lab-flex"><select class="select" id="jsonFontPref" onchange="savePreferences()"><option value="mono">JetBrains Mono</option><option value="ui">Consolas / Segoe</option></select><select class="select" id="jsonSizePref" onchange="savePreferences()"><option>12</option><option>13</option><option>14</option><option selected="">15</option><option>16</option><option>18</option><option>20</option></select></div></div>
+<div class="setting-item"><div><b>Fonte cURL</b><small>Separada de JSON e informações</small></div><div class="lab-flex"><select class="select" id="curlFontPref" onchange="savePreferences()"><option value="mono">JetBrains Mono</option><option value="ui">Consolas / Segoe</option></select><select class="select" id="curlSizePref" onchange="savePreferences()"><option>11</option><option selected="">12</option><option>13</option><option>14</option><option>15</option><option>16</option></select></div></div>
+<div class="lab-callout">IDE: IntelliJ IDEA 2025.3+ com suporte Java. Build do plugin: JDK 21 e Gradle Wrapper. O HTML é uma prévia independente e não precisa desses requisitos.</div></div><div class="modal-foot"><button class="primary" onclick='savePreferences();closeSettings();toast("Preferências salvas localmente")'>Concluído</button></div></div></div>
+<script>
+const $=id=>document.getElementById(id);
+const icons={settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06-1.91 1.91-.07-.06A1.65 1.65 0 0 0 16 18.4a1.65 1.65 0 0 0-1 1.5V20H9v-.1a1.65 1.65 0 0 0-1-1.5 1.65 1.65 0 0 0-1.82.33l-.06.06-1.91-1.91.06-.07A1.65 1.65 0 0 0 4.6 15 1.65 1.65 0 0 0 3.1 14H3V10h.1A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06 1.91-1.91.07.06A1.65 1.65 0 0 0 8 5.6a1.65 1.65 0 0 0 1-1.5V4h6v.1a1.65 1.65 0 0 0 1 1.5 1.65 1.65 0 0 0 1.82-.33l.06-.06 1.91 1.91-.06.07A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.5 1H21v4h-.1a1.65 1.65 0 0 0-1.5 1Z"/>',github:'<path d="M9 19c-4.3 1.5-4.3-2.5-6-3m12 6v-3.9a3.4 3.4 0 0 0-.9-2.6c3-.3 6.1-1.5 6.1-6.7a5.2 5.2 0 0 0-1.4-3.5 4.8 4.8 0 0 0-.1-3.5s-1.1-.4-3.6 1.3a12.6 12.6 0 0 0-6.5 0C6 1.4 4.9 1.8 4.9 1.8a4.8 4.8 0 0 0-.1 3.5 5.2 5.2 0 0 0-1.4 3.5c0 5.2 3.1 6.4 6.1 6.7a3.4 3.4 0 0 0-.9 2.6V22"/>',braces:'<path d="M8 3H6a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5a2 2 0 0 0 2 2h2m8-17h2a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2 2 2 0 0 0-2 2v5a2 2 0 0 1-2 2h-2"/>',search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',"git-compare":'<circle cx="7" cy="6" r="2"/><circle cx="17" cy="18" r="2"/><path d="M7 8v7a3 3 0 0 0 3 3h5M17 16V9a3 3 0 0 0-3-3H9"/>',list:'<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>',copy:'<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',"arrow-right":'<path d="M5 12h14m-6-6 6 6-6 6"/>'};
+function iconsInit(root=document){root.querySelectorAll('[data-icon]').forEach(n=>{let path=icons[n.dataset.icon];if(path)n.innerHTML='<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">'+path+'</svg>';});}iconsInit();
+let state={endpoint:'feign',payload:'request',fixed:false,pinned:false,source:'curl',collection:[],view:'preview',scanRun:false};
+const schemaExample={type:'object',additionalProperties:false,required:['titulo','autor','anoPublicacao','isbn'],properties:{titulo:{type:'string'},autor:{type:'string'},anoPublicacao:{type:'integer'},isbn:{type:'string'}}};
+const responseFeign={id:'f2e9b1f3-6105-45c8-9ae1-10befa788f21',situacao:'CADASTRADO'};
+const requestCtrl={titulo:'Clean Architecture',autor:'Robert C. Martin',anoPublicacao:2017,isbn:'9780134494166'};
+const feignCode=(fixed)=>`// Exemplo do repositório JSON Lens — BibliotecaClient.java\npackage exemplo.biblioteca;\n\nimport com.fasterxml.jackson.annotation.JsonProperty;\nimport jakarta.validation.constraints.NotBlank;\nimport jakarta.validation.constraints.NotNull;\nimport org.springframework.cloud.openfeign.FeignClient;\nimport org.springframework.web.bind.annotation.PostMapping;\nimport org.springframework.web.bind.annotation.RequestBody;\nimport java.util.UUID;\n\n@FeignClient(name = "biblioteca", url = "\${biblioteca.url}")\npublic interface BibliotecaClient {\n    @PostMapping("/v1/acervo/livros")\n    BibliotecaResponse criar(@RequestBody LivroParaBiblioteca request);\n}\n\nrecord LivroParaBiblioteca(\n    @NotBlank String titulo,\n    @NotBlank String autor,\n    @NotNull Integer anoPublicacao,\n    // O receptor exige "isbn" — visualize a diferença no Lens.\n    @JsonProperty("${fixed?'isbn':'codigoIsbn'}") String isbn\n) {}\n\nrecord BibliotecaResponse(UUID id, String situacao) {}`;
+const controllerCode=`// Controller ilustrativo para demonstrar navegação\npackage exemplo.biblioteca;\n\nimport org.springframework.web.bind.annotation.*;\nimport jakarta.validation.Valid;\n\n@RestController\n@RequestMapping("/api/livros")\npublic class LivroController {\n    private final BibliotecaClient bibliotecaClient;\n\n    public LivroController(BibliotecaClient bibliotecaClient) {\n        this.bibliotecaClient = bibliotecaClient;\n    }\n\n    @PostMapping\n    public BibliotecaResponse cadastrar(\n        @Valid @RequestBody LivroParaBiblioteca request\n    ) {\n        return bibliotecaClient.criar(request);\n    }\n}`;
+function codeHtml(src){let s=src.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');return s.split(/(\/\/[^\n]*|"(?:\\.|[^"\\])*"|@[A-Za-z]+|\b(?:public|class|record|interface|private|final|return|import|package|new)\b|\b(?:String|Integer|UUID|BibliotecaResponse|LivroParaBiblioteca|BibliotecaClient|RestController|RequestMapping|PostMapping)\b)/g).map(t=>{if(/^\/\//.test(t))return `<span class="tok-cmt">${t}</span>`;if(/^"/.test(t))return `<span class="tok-string">${t}</span>`;if(/^@/.test(t))return `<span class="tok-ann">${t}</span>`;if(/^(public|class|record|interface|private|final|return|import|package|new)$/.test(t))return `<span class="tok-kw">${t}</span>`;if(/^(String|Integer|UUID|BibliotecaResponse|LivroParaBiblioteca|BibliotecaClient|RestController|RequestMapping|PostMapping)$/.test(t))return `<span class="tok-type">${t}</span>`;return t}).join('')}
+function renderJava(){const src=state.endpoint==='feign'?feignCode(state.fixed):controllerCode;const lines=src.split('\n');$('javaCode').innerHTML=lines.map((l,i)=>`<div class="code-line ${((state.endpoint==='feign'&&i===12)||(state.endpoint==='controller'&&i===14))?'hot':''}"><span class="ln">${i+1}</span><span class="src">${codeHtml(l)||'&nbsp;'}</span></div>`).join('');const file=state.endpoint==='feign'?'BibliotecaClient.java':'LivroController.java';$('titleFile').textContent=file;$('toolbarFile').textContent=file;$('tabFeign').classList.toggle('active',state.endpoint==='feign');$('tabController').classList.toggle('active',state.endpoint==='controller');$('fileBiblioteca').classList.toggle('current',state.endpoint==='feign');$('fileController').classList.toggle('current',state.endpoint==='controller');$('editorPath').innerHTML=`exemplo.biblioteca &nbsp; / &nbsp; <strong>${state.endpoint==='feign'?'BibliotecaClient':'LivroController'}</strong> &nbsp; / &nbsp; ${state.endpoint==='feign'?'criar()':'cadastrar()'}`;}
+function getRequest(){if(state.endpoint==='controller')return {...requestCtrl};return {titulo:'Clean Architecture',autor:'Robert C. Martin',anoPublicacao:2017,[state.fixed?'isbn':'codigoIsbn']:'9780134494166'};}
+function getResponse(){return state.endpoint==='feign'?responseFeign:{id:'f2e9b1f3-6105-45c8-9ae1-10befa788f21',situacao:'CADASTRADO'};}
+function toSchema(o){return {type:'object',properties:Object.fromEntries(Object.entries(o).map(([k,v])=>[k,{type:typeof v==='number'?(Number.isInteger(v)?'integer':'number'):typeof v}]))};}
+function escapeText(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function jsonHighlight(str){return escapeText(str).replace(/(&quot;(?:\\.|[^&])*?&quot;)(\s*:)?|\b(true|false|null)\b|\b(-?\d+(?:\.\d+)?)\b/g,(full,key,colon,boolean,number)=>{if(key)return `<span class="${colon?'j-key':'j-str'}">${key}</span>${colon||''}`;if(boolean)return `<span class="j-bool">${boolean}</span>`;if(number)return `<span class="j-num">${number}</span>`;return full})}
+function renderPreview(){const feign=state.endpoint==='feign';$('methodSelect').value=state.endpoint;$('endpointRoute').textContent=feign?'/v1/acervo/livros':'/api/livros';$('endpointMeta').textContent=feign?'BibliotecaClient · criar(LivroParaBiblioteca)':'LivroController · cadastrar(LivroParaBiblioteca)';$('directionBadge').textContent=feign?'OUTBOUND · FEIGN':'INBOUND · CONTROLLER';$('httpBadge').classList.toggle('blue',!feign);$('reqTab').classList.toggle('active',state.payload==='request');$('resTab').classList.toggle('active',state.payload==='response');const body=state.payload==='request'?getRequest():getResponse();const schema=$('schemaToggle').checked;const content=schema?toSchema(body):body;$('jsonPreview').innerHTML=jsonHighlight(JSON.stringify(content,null,2));$('codeboxTitle').textContent=(state.payload==='request'?'request':'response')+(schema?'.schema.json':'.json');$('previewFileInfo').textContent=Object.keys(body).length+' propriedades · '+(schema?'schema inferido':'exemplo ilustrativo');const warn=feign&&!state.fixed;$('previewWarning').classList.toggle('good',!warn);$('previewWarning').querySelector('.warn-icon').textContent=warn?'⚠':'✓';$('warningMessage').innerHTML=warn?'<strong>Divergência potencial no contrato</strong><br>O cliente declara <code>codigoIsbn</code>, enquanto a API receptora espera <code>isbn</code>.':'<strong>Estrutura de exemplo alinhada</strong><br>Nenhuma divergência de nome de campo identificada neste cenário ilustrativo.';renderDetails();}
+function renderDetails(){const f=state.endpoint==='feign';$('detailSignature').textContent=f?'BibliotecaResponse criar(LivroParaBiblioteca request)':'BibliotecaResponse cadastrar(LivroParaBiblioteca request)';$('detailDirection').textContent=f?'OUTBOUND · cliente OpenFeign':'INBOUND · Spring REST Controller';$('detailRoute').textContent=f?'POST /v1/acervo/livros':'POST /api/livros';$('compareActualLabel').textContent=f?'BibliotecaClient.criar()':'LivroController.cadastrar()';$('actualFields').innerHTML=Object.keys(getRequest()).map(escapeText).join('<br>');}
+function chooseEndpoint(e,force=false){if(state.pinned&&!force&&e!==state.endpoint){toast('Seleção fixada. Desafixe antes de trocar de endpoint.');$('methodSelect').value=state.endpoint;return;}state.endpoint=e;renderJava();renderPreview();if(state.view==='compare')compareContracts(false);$('terminalEvent').innerHTML=`<span class="term-green">✓</span> Resolved &nbsp;· ${e==='feign'?'BibliotecaClient.criar()':'LivroController.cadastrar()'}`;}
+function choosePayload(p){state.payload=p;renderPreview()}
+function togglePin(){state.pinned=!state.pinned;$('pinBtn').classList.toggle('on',state.pinned);$('pinBtn').textContent=state.pinned?'♧  Desafixar':'♧  Fixar';toast(state.pinned?'Endpoint fixado. Você pode editar outros arquivos.':'Seleção liberada. Acompanha o editor.');}
+function toggleDto(){state.fixed=!state.fixed;$('syncStatus').textContent='Atualizando análise PSI…';$('previewStatus').textContent='◌ Reanalisando...';$('fixDtoBtn').textContent=state.fixed?'↶ Reverter alteração simulada':'✦ Simular correção @JsonProperty';renderJava();setTimeout(()=>{$('syncStatus').textContent='Live sync · alterações monitoradas';$('previewStatus').textContent='● JSON sincronizado';renderPreview();if(state.view==='compare')compareContracts(false);toast(state.fixed?'@JsonProperty alterado para "isbn" — preview atualizado.':'DTO original restaurado — divergência visível novamente.');},350);}
+function navigate(v){state.view=v;document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));document.querySelectorAll('.view').forEach(b=>b.hidden=b.id!==`view-${v}`);$('lensScroll').scrollTop=0;if(v==='compare')compareContracts(false);if(v==='search'&&!state.scanRun&&$('curlText').value==='')loadCurlExample();}
+function toast(message){const el=$('toast');el.textContent=message;el.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove('show'),2600)}
+async function copyText(s){try{await navigator.clipboard.writeText(s);toast('Conteúdo copiado para a área de transferência.')}catch(e){const ta=document.createElement('textarea');ta.value=s;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('Conteúdo copiado.')}}
+function copyPayload(){const body=state.payload==='request'?getRequest():getResponse();copyText(JSON.stringify($('schemaToggle').checked?toSchema(body):body,null,2))}
+function openSettings(){$('settingsOverlay').classList.add('show')}
+function closeSettings(){$('settingsOverlay').classList.remove('show')}
+function changeAccent(v){const colors={orange:['#ff7b2f','#ffa65d'],amber:['#f7aa3e','#ffd086'],red:['#ff6b58','#ffab93']};const [a,b]=colors[v]||colors.orange;document.documentElement.style.setProperty('--orange',a);document.documentElement.style.setProperty('--orange2',b)}
+function changeFontSize(v){document.documentElement.style.setProperty('--json-size',v)}
+function languageNotice(v){if(v.includes('English'))toast('A troca integral de idioma pertence ao plugin. Este conceito usa rótulos em português.');}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSettings();if((e.ctrlKey||e.metaKey)&&e.key==='1'){e.preventDefault();navigate('preview')}if((e.ctrlKey||e.metaKey)&&e.key==='2'){e.preventDefault();navigate('search')}if((e.ctrlKey||e.metaKey)&&e.key==='3'){e.preventDefault();navigate('compare')}});
+function chooseSource(src){state.source=src;$('sourceCurlTab').classList.toggle('active',src==='curl');$('sourceCollectionTab').classList.toggle('active',src==='collection');$('sourceCurl').hidden=src!=='curl';$('sourceCollection').hidden=src!=='collection';}
+function loadCurlExample(){$('curlText').value=`curl -X POST 'https://biblioteca.exemplo/v1/acervo/livros' \\\n  -H 'Content-Type: application/json' \\\n  -d '{"titulo":"Clean Architecture","autor":"Robert C. Martin","anoPublicacao":2017,"isbn":"9780134494166"}'`;}
+async function loadCurlFile(input){const f=input.files?.[0];if(!f)return;try{$('curlText').value=await f.text();chooseSource('curl');toast('cURL carregado: '+f.name)}catch(e){toast('Não foi possível ler o arquivo')}}
+async function loadCollectionFile(input){const f=input.files?.[0];if(!f)return;try{const data=JSON.parse(await f.text());let parsed=[];if(Array.isArray(data.item)){const walk=items=>{items.forEach(x=>{if(x.item)walk(x.item);if(x.request){const req=x.request;const rawUrl=typeof req.url==='string'?req.url:(req.url?.raw||'');parsed.push({name:x.name,method:req.method||'GET',url:rawUrl,body:req.body?.raw||''})}})};walk(data.item)}else if(Array.isArray(data.resources)){parsed=data.resources.filter(x=>x._type==='request').map(x=>({name:x.name,method:x.method||'GET',url:x.url||'',body:x.body?.text||''}))}else throw Error('Formato de collection não identificado');if(!parsed.length)throw Error('Nenhuma request encontrada');state.collection=parsed;$('collectionName').textContent=f.name;$('collectionInfo').textContent=parsed.length+' request(s) carregadas localmente';toast('Collection carregada: '+parsed.length+' requests')}catch(e){toast('Erro na collection: '+e.message)}}
+function parseCurl(str){const methodMatch=str.match(/(?:-X|--request)\s+["']?([A-Z]+)["']?/i);const urlMatch=str.match(/https?:\/\/[^\s'"\\]+/);const bodyMatch=str.match(/(?:-d|--data(?:-raw)?)\s+'([^']*)'/s)||str.match(/(?:-d|--data(?:-raw)?)\s+"([^"\n]*)"/s);const url=urlMatch?urlMatch[0]:'';let path='';try{path=new URL(url).pathname}catch{}return {method:(methodMatch?.[1]||(bodyMatch?'POST':'GET')).toUpperCase(),path,body:bodyMatch?.[1]||'',name:'Requisição cURL'};}
+function runSearch(){let queries=[];if(state.source==='curl'){const str=$('curlText').value.trim();if(!str){toast('Cole um cURL antes de localizar.');return}queries=[parseCurl(str)];if(!queries[0].path){toast('Não foi possível identificar a URL do cURL.');return}}else{if(!state.collection.length){toast('Carregue uma collection JSON antes de localizar.');return}queries=state.collection.map(q=>{let p='';try{p=new URL(q.url).pathname}catch{p=q.url.split('?')[0]||''}return {...q,path:p}})}state.scanRun=true;$('resultCount').textContent=queries.length+' request(s)';$('scanSummary').textContent='Resultado ilustrativo da correspondência por verbo, rota e estrutura. Sem chamadas de rede.';const holder=$('resultsHolder');holder.innerHTML='';for(const q of queries.slice(0,8)){const norm=q.path.replace(/\/$/,'');const same=norm==='/v1/acervo/livros';const matchScore=q.method==='POST'?(same?97:70):42;const name=document.createElement('div');name.className='match-category';name.textContent=`${q.method} ${q.path} · ${q.name||'Request'}`;holder.appendChild(name);const sect1=document.createElement('div');sect1.className='match-category';sect1.textContent='↘ RECEBEM · CONTROLLERS';holder.appendChild(sect1);holder.appendChild(buildMatchCard('LivroController.cadastrar()', 'POST /api/livros', q.method==='POST'?72:30, 'controller', 'Rota /api/livros · @RestController'));const sect2=document.createElement('div');sect2.className='match-category';sect2.textContent='↗ ENVIAM · FEIGN CLIENTS';holder.appendChild(sect2);holder.appendChild(buildMatchCard('BibliotecaClient.criar()', 'POST /v1/acervo/livros', matchScore, 'feign',same?'Método e rota correspondentes · @FeignClient':'Método HTTP / body semelhantes · @FeignClient'));}if(queries.length>8){const notice=document.createElement('p');notice.className='hint';notice.textContent='Demonstração limitada aos primeiros 8 itens da collection.';holder.appendChild(notice)}}
+function buildMatchCard(name,route,score,endpoint,evidence){const d=document.createElement('div');d.className='match-card';const potential=endpoint==='feign'&&!state.fixed;d.innerHTML=`<div style="display:flex;gap:8px;align-items:start"><div><div class="match-name">${escapeText(name)}</div><div class="match-route">${escapeText(route)}</div></div><div class="match-score">${score}%<div class="score-caption">match estimado</div></div></div><div class="scorebar"><span style="width:${score}%"></span></div><div class="match-evidence"><span>✓</span> ${escapeText(evidence)}<br><span>✓</span> Estrutura JSON analisável · fonte local</div><div class="match-details" hidden><div>Direção: ${endpoint==='feign'?'OUTBOUND / Feign':'INBOUND / Controller'}</div><div>Payload declarado e metadados estáticos. ${potential?'O campo codigoIsbn diverge do contrato de exemplo.':'Confira os tipos e obrigatoriedade no contrato externo.'}</div><pre>${escapeText(JSON.stringify(endpoint==='feign'?{titulo:'...',autor:'...',anoPublicacao:2017,[state.fixed?'isbn':'codigoIsbn']:'...'}:requestCtrl,null,2))}</pre></div><div class="match-footer"><button class="card-btn" data-action="expand">Expandir</button><button class="card-btn highlight" data-action="contract">Colar contrato</button><button class="card-btn" data-action="open">Abrir código ↗</button></div>`;d.querySelector('[data-action="expand"]').onclick=()=>{const panel=d.querySelector('.match-details');panel.hidden=!panel.hidden;d.querySelector('[data-action="expand"]').textContent=panel.hidden?'Expandir':'Recolher'};d.querySelector('[data-action="contract"]').onclick=()=>{chooseEndpoint(endpoint,true);navigate('compare');toast('Contrato aberto para '+name)};d.querySelector('[data-action="open"]').onclick=()=>{chooseEndpoint(endpoint,true);navigate('preview');toast('Navegação simulada para '+name)};return d;}
+function resetContract(){$('contractInput').value=JSON.stringify(schemaExample,null,2);compareContracts(false);toast('Contrato de exemplo restaurado')}
+function compareContracts(notify=true){const findings=$('contractFindings');const actual=getRequest();let c;try{c=JSON.parse($('contractInput').value)}catch(e){$('contractScore').textContent='—';$('scoreDescription').textContent='JSON inválido';findings.innerHTML='<div class="finding"><span class="level">ERRO</span>O contrato ainda não é um JSON válido.</div>';if(notify)toast('Verifique a sintaxe do contrato');return}const isSchema=!!c.properties&&(c.type==='object'||Array.isArray(c.required));const expected=isSchema?c:{type:'object',properties:Object.fromEntries(Object.entries(c).map(([k,v])=>[k,{type:typeof v==='number'?'integer':typeof v}])),required:Object.keys(c)};const required=expected.required||[];const errs=[],warns=[];for(const k of required){if(!(k in actual))errs.push({path:'$.'+k,text:'Campo obrigatório no receptor não existe no payload declarado.'})}for(const [k,v] of Object.entries(actual)){if(!(k in (expected.properties||{}))){if(expected.additionalProperties===false)errs.push({path:'$.'+k,text:'Campo extra proibido por additionalProperties: false.'});else warns.push({path:'$.'+k,text:'Campo extra não declarado no contrato externo.'});continue}const expectedType=expected.properties[k].type;const actualType=typeof v==='number'?(Number.isInteger(v)?'integer':'number'):typeof v;if(expectedType&&expectedType!==actualType&&!(expectedType==='number'&&actualType==='integer'))errs.push({path:'$.'+k,text:`Tipo incompatível: ${actualType} → ${expectedType}`})}const score=Math.max(0,100-errs.length*15-warns.length*5);$('contractScore').textContent=score+'%';$('contractScore').style.color=score===100?'var(--green)':'var(--orange2)';$('scoreDescription').textContent=errs.length+' erro(s) · '+warns.length+' aviso(s) · escore ilustrativo';findings.innerHTML='';for(const [type,items] of [['ERRO',errs],['AVISO',warns]]){for(const issue of items){const d=document.createElement('div');d.className='finding';d.innerHTML=`<span class="level">${type}</span><span><b>${escapeText(issue.path)}</b> — ${escapeText(issue.text)}</span>`;findings.appendChild(d)}}if(!errs.length&&!warns.length){findings.innerHTML='<div class="finding ok"><span class="level">OK</span><span>Nenhuma divergência estrutural encontrada neste comparador de demonstração. Isso não substitui testes de integração.</span></div>'}if(notify)toast('Comparação local concluída: '+score+'% (ilustrativo)');$('expectedFields').innerHTML=Object.keys(expected.properties||{}).map(escapeText).join('<br>')||'Sem propriedades';}
+$('contractInput').value=JSON.stringify(schemaExample,null,2);loadCurlExample();chooseEndpoint('feign',true);renderPreview();
+</script><script>// JSON Lens UX Validation Lab — simulated Java metadata; real local JS contract parsing.
+const LAB = {
+ cache:{curl:null,collection:null}, compareMode:'request', model:'record', mapping:'ok', review:{}, editing:false,
+ originalJava:'', timer:null, javaTimer:null, rawCollection:null, originalCurl:'', prefs:{},
+ warnings:[]
+};
+const SAMPLE_OPENAPI_YAML=`openapi: 3.0.3
+info:
+  title: API da Biblioteca
+  version: 1.0.0
+paths:
+  /v1/acervo/livros:
+    post:
+      operationId: criarLivro
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CriarLivroRequest'
+      responses:
+        '201':
+          description: Livro cadastrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LivroCriado'
+components:
+  schemas:
+    CriarLivroRequest:
+      type: object
+      additionalProperties: false
+      required: [titulo, autor, anoPublicacao, isbn]
+      properties:
+        titulo: {type: string}
+        autor: {type: string}
+        anoPublicacao: {type: integer}
+        isbn: {type: string}
+    LivroCriado:
+      type: object
+      additionalProperties: false
+      required: [id, situacao]
+      properties:
+        id: {type: string, format: uuid}
+        situacao: {type: string}`;
+const SAMPLE_OPENAPI_JSON={openapi:'3.0.3',info:{title:'API da Biblioteca',version:'1.0.0'},paths:{'/v1/acervo/livros':{post:{requestBody:{required:true,content:{'application/json':{schema:{$ref:'#/components/schemas/CriarLivroRequest'}}}},responses:{'201':{description:'Criado',content:{'application/json':{schema:{$ref:'#/components/schemas/LivroCriado'}}}}}}}},components:{schemas:{CriarLivroRequest:structuredClone(schemaExample),LivroCriado:{type:'object',additionalProperties:false,required:['id','situacao'],properties:{id:{type:'string',format:'uuid'},situacao:{type:'string'}}}}}};
+const SAMPLE_REFS={type:'object',allOf:[{$ref:'#/$defs/Base'},{type:'object',required:['isbn'],properties:{isbn:{type:'string'}}}],additionalProperties:false,$defs:{Base:{type:'object',required:['titulo','autor','anoPublicacao'],properties:{titulo:{type:'string'},autor:{type:'string'},anoPublicacao:{type:'integer'}}}}};
+const SAMPLE_ONEOF={type:'object',properties:{titulo:{oneOf:[{type:'string'},{type:'number'}]},autor:{type:'string'},anoPublicacao:{type:'integer'},isbn:{type:'string'}},required:['titulo','autor','anoPublicacao','isbn'],additionalProperties:false};
+function useContractPreset(kind){
+ $('contractPreset').value=kind;
+ const examples={schema:JSON.stringify(schemaExample,null,2),example:JSON.stringify(requestCtrl,null,2),'openapi-yaml':SAMPLE_OPENAPI_YAML,'openapi-json':JSON.stringify(SAMPLE_OPENAPI_JSON,null,2),refs:JSON.stringify(SAMPLE_REFS,null,2),oneof:JSON.stringify(SAMPLE_ONEOF,null,2)};
+ $('contractInput').value=examples[kind]||examples.schema;
+ $('contractSourceType').textContent=kind.startsWith('openapi')?'OpenAPI 3.x':kind==='example'?'Exemplo JSON':'JSON Schema';
+ compareContracts(false);
+}
+function selectCompareMode(mode){LAB.compareMode=mode; $('compareRequestTab').classList.toggle('active',mode==='request');$('compareResponseTab').classList.toggle('active',mode==='response');compareContracts(false);}
+function scheduleLiveCompare(){ $('liveCompareStatus').textContent='◌ Interpretando contrato editado…';clearTimeout(LAB.timer);LAB.timer=setTimeout(()=>{compareContracts(false);$('liveCompareStatus').textContent='● Contrato atualizado · análise local'},350);}
+// Lightweight YAML object reader, purposely limited to mapping-based OpenAPI 3 examples.
+function parseYaml(text){
+ const root={};const stack=[{indent:-1,object:root}];
+ const parseScalar=(str)=>{
+  str=str.trim();if(!str)return {};
+  if((str[0]==='"'&&str.at(-1)==='"')||(str[0]==="'"&&str.at(-1)==="'"))return str.slice(1,-1);
+  if(str==='true')return true;if(str==='false')return false;if(str==='null')return null;
+  if(/^\d+(\.\d+)?$/.test(str))return Number(str);
+  if(str[0]==='['&&str.at(-1)===']')return splitInline(str.slice(1,-1)).map(parseScalar);
+  if(str[0]==='{'&&str.at(-1)==='}')return Object.fromEntries(splitInline(str.slice(1,-1)).map(part=>{const idx=part.indexOf(':');return [part.slice(0,idx).trim().replace(/^['"]|['"]$/g,''),parseScalar(part.slice(idx+1))]}));
+  return str;
+ };
+ const splitInline=(value)=>{let result=[],from=0,quote='',depth=0;for(let i=0;i<value.length;i++){const c=value[i];if((c==='"'||c==="'")&&value[i-1]!=='\\'){if(!quote)quote=c;else if(quote===c)quote=''}if(!quote){if(c==='['||c==='{')depth++;if(c===']'||c==='}')depth--;if(c===','&&depth===0){result.push(value.slice(from,i).trim());from=i+1}}}result.push(value.slice(from).trim());return result.filter(Boolean)};
+ for(const line of text.replace(/\t/g,'  ').split(/\r?\n/)){
+  if(!line.trim()||line.trim().startsWith('#')||line.trim()==='---')continue;
+  const m=line.match(/^(\s*)("[^"]+"|'[^']+'|[^:]+):(?:\s*(.*))?$/);
+  if(!m)throw Error('YAML de demonstração: formato não reconhecido na linha '+line.trim().slice(0,50));
+  const indent=m[1].length, key=m[2].trim().replace(/^['"]|['"]$/g,''), val=(m[3]||'').trim();
+  while(stack.length>1&&stack.at(-1).indent>=indent)stack.pop();
+  const value=val?parseScalar(val):{};stack.at(-1).object[key]=value;
+  if(!val&&typeof value==='object')stack.push({indent,object:value});
+ }
+ return root;
+}
+function isOpenApi(root){return !!root && (String(root.openapi||'').startsWith('3.')||!!root.swagger);}
+function resolveJsonSchema(source,schema,warnings,depth=0){
+ if(!schema||typeof schema!=='object')return {type:'unknown'};
+ if(depth>16){warnings.push('Profundidade de referência excedida; verificação parcial.');return {type:'unknown'};}
+ if(schema.$ref){
+  if(!schema.$ref.startsWith('#/')){warnings.push('Referência externa não resolvida: '+schema.$ref);return {type:'unknown'}}
+  const parts=schema.$ref.slice(2).split('/').map(x=>x.replace(/~1/g,'/').replace(/~0/g,'~'));let found=source;
+  for(const p of parts){found=found?.[p]}
+  if(!found){warnings.push('Referência local não encontrada: '+schema.$ref);return {type:'unknown'}}
+  return resolveJsonSchema(source,found,warnings,depth+1);
+ }
+ let merged={...schema};
+ if(Array.isArray(merged.allOf)){warnings.push('allOf combinado parcialmente nesta demonstração.');for(const sub of merged.allOf){const child=resolveJsonSchema(source,sub,warnings,depth+1);merged={...merged,...child,properties:{...(merged.properties||{}),...(child.properties||{})},required:[...new Set([...(merged.required||[]),...(child.required||[])])]};}delete merged.allOf;}
+ for(const branch of ['oneOf','anyOf'])if(Array.isArray(merged[branch])){warnings.push(branch+' parcial: apenas a primeira alternativa é analisada.');merged={...merged,...resolveJsonSchema(source,merged[branch][0],warnings,depth+1)};delete merged[branch];}
+ if(merged.properties){merged.properties=Object.fromEntries(Object.entries(merged.properties).map(([k,v])=>[k,resolveJsonSchema(source,v,warnings,depth+1)]));}
+ if(merged.items)merged.items=resolveJsonSchema(source,merged.items,warnings,depth+1);
+ if(typeof merged.additionalProperties==='object')merged.additionalProperties=resolveJsonSchema(source,merged.additionalProperties,warnings,depth+1);
+ return merged;
+}
+function sampleToSchema(sample){
+ if(sample===null)return {type:'null',nullable:true};
+ if(Array.isArray(sample))return {type:'array',items:sample.length?sampleToSchema(sample[0]):{type:'unknown'}};
+ if(typeof sample==='object')return {type:'object',properties:Object.fromEntries(Object.entries(sample).map(([k,v])=>[k,sampleToSchema(v)])),required:[]};
+ if(typeof sample==='number')return {type:Number.isInteger(sample)?'integer':'number'};
+ return {type:typeof sample};
+}
+function parseContractInput(input){
+ const trimmed=input.trim();if(!trimmed)throw Error('Informe um contrato para comparar.');
+ let root;try{root=JSON.parse(trimmed)}catch(e){root=parseYaml(trimmed)}
+ const notes=[],openapi=isOpenApi(root);
+ if(openapi){
+  const path=state.endpoint==='feign'?'/v1/acervo/livros':'/api/livros';
+  const operation=root.paths?.[path]?.post;
+  if(!operation)throw Error('Operação POST '+path+' não localizada no OpenAPI fornecido. Selecione BibliotecaClient para o exemplo.');
+  const schema=LAB.compareMode==='request'?operation.requestBody?.content?.['application/json']?.schema:Object.entries(operation.responses||{}).filter(([status])=>/^2\d\d$/.test(status)).map(([,r])=>r.content?.['application/json']?.schema).find(Boolean);
+  if(!schema)throw Error('A operação não declara um schema JSON de '+LAB.compareMode+'.');
+  return {schema:resolveJsonSchema(root,schema,notes),type:'OpenAPI 3.x',notes};
+ }
+ if(root&&typeof root==='object'&&(root.type||root.$ref||root.properties||root.allOf||root.oneOf||root.anyOf))return {schema:resolveJsonSchema(root,root,notes),type:'JSON Schema',notes};
+ return {schema:sampleToSchema(root),type:'Exemplo JSON',notes:['Um exemplo de JSON não comprova campos obrigatórios ou regras de validação.']};
+}
+function simulatedActualSchema(){
+ if(LAB.compareMode==='response')return {type:'object',required:[],properties:{id:{type:'string',format:'uuid'},situacao:{type:'string'}}};
+ const obj={type:'object',required:['titulo','autor','anoPublicacao'],properties:{titulo:{type:'string',nullable:false},autor:{type:'string',nullable:false},anoPublicacao:{type:'integer',nullable:false},[state.endpoint==='controller'?'isbn':state.fixed?'isbn':'codigoIsbn']:{type:'string',nullable:true}}};
+ return obj;
+}
+function compareSchemaNodes(actual,expected,path,findings,depth=0){
+ if(depth>14)return findings.push({level:'warning',path,text:'Profundidade máxima; checagem parcial.'});
+ const ak=Array.isArray(actual.type)?actual.type.find(t=>t!=='null'):actual.type||'unknown';
+ const ek=Array.isArray(expected.type)?expected.type.find(t=>t!=='null'):expected.type||'unknown';
+ if(ak==='unknown'||ek==='unknown'){findings.push({level:'warning',path,text:'Tipo não resolvido; compatibilidade não comprovada.'});return;}
+ if(ak!==ek&&!(ak==='integer'&&ek==='number')){findings.push({level:'error',path,text:`Tipo incompatível: projeto envia ${ak}, receptor exige ${ek}.`});return;}
+ if(expected.nullable===false&&actual.nullable===true)findings.push({level:'warning',path,text:'O projeto permite null; o receptor não declara aceitar null.'});
+ if(expected.format&&actual.format&&expected.format!==actual.format)findings.push({level:'warning',path,text:`Formato divergente: ${actual.format} × ${expected.format}.`});
+ if(expected.enum){if(!actual.enum){findings.push({level:'warning',path,text:'Enum do contrato externo não garantido estaticamente.'});}else for(const value of actual.enum)if(!expected.enum.includes(value))findings.push({level:'error',path,text:'Valor de enum não permitido: '+value});}
+ if(ek==='array'&&actual.items&&expected.items)compareSchemaNodes(actual.items,expected.items,path+'[]',findings,depth+1);
+ if(ek==='object'){
+  const ep=expected.properties||{}, ap=actual.properties||{};
+  for(const required of expected.required||[]){if(!(required in ap)){findings.push({level:'error',path:path+'.'+required,text:'Campo obrigatório no receptor não existe no payload declarado.'});const expectedSuffix=required.match(/^(.+)Id$/);if(expectedSuffix){const misplaced='id'+expectedSuffix[1][0].toUpperCase()+expectedSuffix[1].slice(1);if(misplaced in ap)findings.push({level:'warning',path:path+'.'+required,text:`Nome sugestivo: substituir ${misplaced} por ${required}.`});}}else if(!new Set(actual.required||[]).has(required))findings.push({level:'warning',path:path+'.'+required,text:'Obrigatoriedade exigida pelo receptor não comprovada pelo modelo local.'});}
+  for(const [key,value] of Object.entries(ap)){
+   if(!(key in ep)){
+    if(expected.additionalProperties===false)findings.push({level:'error',path:path+'.'+key,text:'Campo extra proibido por additionalProperties: false.'});
+    else if(expected.additionalProperties&&typeof expected.additionalProperties==='object')compareSchemaNodes(value,expected.additionalProperties,path+'.'+key,findings,depth+1);
+    else findings.push({level:'warning',path:path+'.'+key,text:'Campo extra não declarado no contrato externo; aceitação incerta.'});
+   }else compareSchemaNodes(value,ep[key],path+'.'+key,findings,depth+1);
+  }
+ }
+}
+compareContracts=function(notify=true){
+ const target=$('contractFindings');let result;try{result=parseContractInput($('contractInput').value)}catch(e){$('contractScore').textContent='—';$('scoreDescription').textContent='Contrato inválido ou operação indisponível';target.innerHTML='<div class="finding"><span class="level">ENTRADA</span>'+escapeText(e.message)+'</div>';$('contractCaveats').textContent=e.message;if(notify)toast('Não foi possível comparar: '+e.message);return;}
+ const notes=[...result.notes],actual=simulatedActualSchema(), findings=[];
+ compareSchemaNodes(actual,result.schema,'$',findings);
+ // Include only concrete type-compatibility issues in demo score; still illustrative.
+ const errors=findings.filter(x=>x.level==='error').length,warnings=findings.filter(x=>x.level==='warning').length;
+ const score=Math.max(0,100-errors*15-warnings*5);$('contractScore').textContent=score+'%';$('contractScore').style.color=errors?'var(--orange2)':'var(--green)';
+ $('scoreDescription').textContent=`${result.type} · ${errors} erro(s) · ${warnings} aviso(s) · estimativa ilustrativa`;
+ target.innerHTML=findings.length?findings.map(f=>`<div class="finding ${f.level==='warning'?'':'bad'}"><span class="level">${f.level==='error'?'ERRO':'AVISO'}</span><span><b>${escapeText(f.path)}</b> — ${escapeText(f.text)}</span></div>`).join(''):'<div class="finding ok"><span class="level">OK</span><span>Nenhuma divergência estrutural identificada nesta comparação parcial. Não garante compatibilidade em runtime.</span></div>';
+ $('contractCaveats').textContent=[...new Set(notes),'Não executa requests, Java, mapeadores nem validadores de runtime.'].join(' · ');
+ $('actualFields').innerHTML=Object.keys(actual.properties||{}).map(escapeText).join('<br>');$('expectedFields').innerHTML=Object.keys(result.schema.properties||{}).map(escapeText).join('<br>')||'Schema sem propriedades enumeráveis';
+ $('contractSourceType').textContent=result.type;
+ if(notify)toast('Aderência demonstrativa calculada: '+score+'%');
+};
+resetContract=()=>{useContractPreset('schema');toast('Contrato de exemplo restaurado.');};
+// cURL input: local tokenization for representative flags. Never executes a request.
+function shellTokens(raw){
+ let input=raw.replace(/\\\s*\r?\n\s*/g,' '),out=[],current='',quote='',escaped=false,started=false;
+ for(let i=0;i<input.length;i++){
+  let ch=input[i];
+  if(escaped){current+=ch;escaped=false;started=true;continue;}
+  if(ch==='\\'&&quote!=="'"){if(quote==='"'&&input[i+1]!=='"'&&input[i+1]!=='\\'){current+='\\';continue;}escaped=true;continue;}
+  if(quote){if(ch===quote)quote='';else current+=ch;started=true;continue;}
+  if(ch==='"'||ch==="'"){quote=ch;started=true;continue;}
+  if(/\s/.test(ch)){if(started){out.push(current);current='';started=false;}continue;}
+  current+=ch;started=true;
+ }
+ if(quote)throw Error('cURL incompleto: aspas abertas.');if(started)out.push(current);
+ return out;
+}
+parseCurl=function(raw){
+ const parts=shellTokens(raw);if(parts[0]?.toLowerCase()!=='curl')throw Error('O comando deve começar com curl.');
+ if(parts.some(x=>x.startsWith('--data-urlencode')))throw Error('A opção --data-urlencode não é suportada pelo parser.');
+ let method='',url='',bodies=[],forceGet=false,head=false,headers=[];
+ const need=(i,opt)=>{if(i+1>=parts.length)throw Error('Valor ausente em '+opt);return parts[i+1]};
+ for(let i=1;i<parts.length;i++){
+  let p=parts[i];if(['-X','--request'].includes(p)){method=need(i,p).toUpperCase();i++;continue;}
+  if(p.startsWith('--request=')){method=p.split('=').slice(1).join('=').toUpperCase();continue;}
+  if(p.startsWith('-X')&&p.length>2){method=p.slice(2).toUpperCase();continue;}
+  if(p==='--url'){url=need(i,p);i++;continue;}if(p.startsWith('--url=')){url=p.slice(6);continue;}
+  if(['-d','--data','--data-raw','--data-binary','--data-ascii'].includes(p)){bodies.push(need(i,p));i++;continue;}
+  if(['--data=','--data-raw=','--data-binary=','--data-ascii='].some(flag=>p.startsWith(flag))){bodies.push(p.slice(p.indexOf('=')+1));continue;}
+  if(p.startsWith('-d')&&p.length>2){bodies.push(p.slice(2));continue;}
+  if(['-H','--header'].includes(p)){headers.push(need(i,p));i++;continue;}
+  if(p==='-G'||p==='--get'){forceGet=true;continue;}if(p==='-I'||p==='--head'){head=true;continue;}
+  if(/^https?:\/\//i.test(p))url=p;
+ }
+ if(!url)throw Error('URL HTTP(S) não encontrada.');let u;try{u=new URL(url)}catch{throw Error('URL inválida.')}if(!['http:','https:'].includes(u.protocol))throw Error('Somente URL HTTP/HTTPS.');
+ const body=bodies.join('&');if(body.startsWith('@'))throw Error('O parser demonstrativo não lê payload @arquivo no cURL; cole o JSON ou importe um arquivo.');
+ if(forceGet){if(body)u.search+=(u.search?'&':'?')+body;}
+ return {name:'Requisição cURL',method:(method||(head?'HEAD':forceGet?'GET':body?'POST':'GET')),url,body:forceGet?'':body,path:u.pathname,headers,source:'curl'};
+};
+function unpackCollection(obj){
+ let parsed=[];
+ if(Array.isArray(obj.item)){
+  const walk=(entries)=>entries.forEach(item=>{if(Array.isArray(item.item))walk(item.item);else if(item.request){const r=item.request,url=typeof r.url==='string'?r.url:r.url?.raw||(Array.isArray(r.url?.path)?'https://example.org/'+r.url.path.join('/'):''),raw=r.body?.raw||'';parsed.push({name:item.name||'Requisição',method:(r.method||'GET').toUpperCase(),url,body:raw})}});walk(obj.item);
+ }else if(Array.isArray(obj.resources)){
+  parsed=obj.resources.filter(v=>v._type==='request').map(r=>({name:r.name||'Requisição',method:(r.method||'GET').toUpperCase(),url:r.url||'',body:r.body?.text||''}));
+ }else throw Error('Collection não reconhecida. Use Postman v2.1 ou export Insomnia em JSON.');
+ if(!parsed.length)throw Error('A collection não contém requests reconhecíveis.');
+ if(parsed.length>30)throw Error('O laboratório HTML aceita até 30 requests por collection para preservar a experiência. Este não é o limite do plugin Java.');
+ return parsed.map(q=>{let path='';try{path=new URL(q.url.replace(/\{\{[^}]+\}\}/g,'demo.example')).pathname}catch{path=q.url.split('?')[0]||'';}return {...q,path,source:'collection'}});
+}
+function renderCollectionPreview(name='Collection carregada'){
+ $('collectionName').textContent=name;$('collectionInfo').textContent=state.collection.length+' request(s) reconhecidas';$('collectionCount').textContent=state.collection.length+' requests';
+ $('collectionPreview').innerHTML=jsonHighlight(JSON.stringify(state.collection.map(({name,method,path,body})=>({name,method,path,body:parseJsonOrText(body)})),null,2));
+}
+function parseJsonOrText(data){try{return JSON.parse(data)}catch{return data||null}}
+async function loadCollectionFile(input){
+ const file=input.files?.[0];if(!file)return;
+ try{const raw=await file.text();const data=JSON.parse(raw);state.collection=unpackCollection(data);LAB.rawCollection=data;renderCollectionPreview(file.name);chooseSource('collection');toast(state.collection.length+' requests lidas localmente.');}catch(e){toast('Collection inválida: '+e.message);}
+ input.value='';
+}
+function loadSampleCollection(type){
+ const list=[{name:'Criar livro',request:{method:'POST',url:{raw:'https://biblioteca.exemplo/v1/acervo/livros'},body:{mode:'raw',raw:JSON.stringify(requestCtrl)}}},{name:'Listar livros',request:{method:'GET',url:{raw:'https://biblioteca.exemplo/v1/acervo/livros'},body:{mode:'raw',raw:''}}},{name:'Cadastrar localmente',request:{method:'POST',url:{raw:'https://local.exemplo/api/livros'},body:{mode:'raw',raw:JSON.stringify(requestCtrl)}}}];
+ const data=type==='postman'?{info:{name:'Biblioteca · Postman',schema:'https://schema.getpostman.com/json/collection/v2.1.0/collection.json'},item:list}:{_type:'export',resources:list.map((x,i)=>({_id:'req_'+i,_type:'request',name:x.name,method:x.request.method,url:x.request.url.raw,body:{mimeType:'application/json',text:x.request.body.raw}}))};
+ LAB.rawCollection=data;state.collection=unpackCollection(data);renderCollectionPreview(type==='postman'?'biblioteca.postman_collection.json':'biblioteca.insomnia.json');chooseSource('collection');toast('Exemplo '+type+' carregado.');
+}
+function estimateMatch(q,ep){
+ const isFeign=ep==='feign';const expectedPath=isFeign?'/v1/acervo/livros':'/api/livros';let score=0,evidence=[];
+ if(q.method==='POST'){score+=33;evidence.push('Método HTTP POST corresponde ao endpoint');}else{score+=4;evidence.push('Método HTTP difere de POST');}
+ if(q.path.replace(/\/$/,'')===expectedPath){score+=46;evidence.push('Rota declarada coincide exatamente');}else if(q.path.includes('livros')){score+=19;evidence.push('Segmento da rota semelhante: livros');}else evidence.push('Rota sem correspondência direta');
+ const obj=parseJsonOrText(q.body);if(obj&&typeof obj==='object'&&!Array.isArray(obj)){score+=18;evidence.push('Body JSON informado: campos estruturais comparáveis');}else evidence.push('Body JSON não disponível');
+ const actual=ep==='feign'?{...requestCtrl,[state.fixed?'isbn':'codigoIsbn']:requestCtrl.isbn}:requestCtrl;
+ const reqSchema=sampleToSchema(obj&&typeof obj==='object'?obj:{}),actualSchema=ep==='feign'?simulatedActualSchema():{type:'object',required:[],properties:Object.fromEntries(Object.entries(requestCtrl).map(([k,v])=>[k,sampleToSchema(v)]))};
+ if(isFeign){actualSchema.properties=Object.fromEntries(Object.entries(getFeignRequest()).map(([k,v])=>[k,sampleToSchema(v)]));}
+ const issues=[];
+ if(obj&&typeof obj==='object'&&!Array.isArray(obj)){
+  reqSchema.required=[]; reqSchema.additionalProperties=false;
+  compareSchemaNodes(actualSchema,{...reqSchema,required:Object.keys(obj),additionalProperties:false},'$',issues);
+ }
+ const adherent=q.body&&typeof obj==='object'?Math.max(0,100-issues.filter(v=>v.level==='error').length*15-issues.filter(v=>v.level==='warning').length*5):null;
+ return {score:Math.min(100,score),evidence,issues,adherence:adherent};
+}
+function getFeignRequest(){return {titulo:'Clean Architecture',autor:'Robert C. Martin',anoPublicacao:2017,[state.fixed?'isbn':'codigoIsbn']:'9780134494166'};}
+function makeMatchCard(q,endpoint){
+ const feign=endpoint==='feign';const match=estimateMatch(q,endpoint), name=feign?'BibliotecaClient.criar()':'LivroController.cadastrar()',route=feign?'POST /v1/acervo/livros':'POST /api/livros';
+ const d=document.createElement('div');d.className='match-card';
+ const request=feign?getFeignRequest():requestCtrl;
+ const detail=`<div class="lab-grid" style="margin-top:11px"><div class="lab-mini-card"><strong>Request declarado</strong><pre class="lab-json-preview">${escapeText(JSON.stringify(request,null,2))}</pre></div><div class="lab-mini-card"><strong>Response declarado</strong><pre class="lab-json-preview">${escapeText(JSON.stringify(responseFeign,null,2))}</pre></div></div><div class="lab-model-notes" style="margin-top:9px">${match.issues.length?match.issues.map(x=>`<p>⚠ <b>${escapeText(x.path)}</b>: ${escapeText(x.text)}</p>`).join(''):'Nenhuma divergência estrutural sinalizada para o body do exemplo.'}</div>`;
+ d.innerHTML=`<div class="lab-coverage-top"><div><div class="match-name">${escapeText(name)}</div><div class="match-route">${escapeText(route)}</div></div><div style="text-align:right"><div class="match-score">${match.score}/100</div><div class="score-caption">MATCH · ranking</div><div class="lab-status ${match.adherence===100?'implemented':''}" style="margin-top:6px">${match.adherence==null?'ADERÊNCIA —':'ADERÊNCIA '+match.adherence+'%'}</div></div></div><div class="scorebar"><span style="width:${match.score}%"></span></div><div class="match-evidence">${match.evidence.map(e=>'<div><span>✓</span> '+escapeText(e)+'</div>').join('')}<small>${feign?'OUTBOUND · @FeignClient':'INBOUND · @RestController'} · ${feign?'examples/BibliotecaClient.java':'demonstração/LivroController.java'}</small></div><div class="match-details" hidden>${detail}</div><div class="match-footer"><button class="card-btn" data-action="expand">Expandir</button><button class="card-btn highlight" data-action="contract">Colar contrato</button><button class="card-btn" data-action="open">Abrir código ↗</button></div>`;
+ d.querySelector('[data-action="expand"]').onclick=()=>{const panel=d.querySelector('.match-details');panel.hidden=!panel.hidden;d.querySelector('[data-action="expand"]').textContent=panel.hidden?'Expandir':'Recolher'};
+ d.querySelector('[data-action="contract"]').onclick=()=>{chooseEndpoint(endpoint,true);useContractPreset('schema');navigate('compare');};
+ d.querySelector('[data-action="open"]').onclick=()=>{chooseEndpoint(endpoint,true);navigate('preview');toast('Código de exemplo selecionado no editor ilustrativo.');};
+ return d;
+}
+function renderSearchCache(){
+ const cache=LAB.cache[state.source],holder=$('resultsHolder');holder.replaceChildren();
+ if(!cache){$('resultCount').textContent='Sem busca nesta origem';$('scanSummary').textContent='Cole um cURL ou importe uma collection e execute a busca.';$('sourceCacheStatus').textContent='As buscas cURL e collection são armazenadas separadamente nesta sessão.';return;}
+ $('resultCount').textContent=cache.queries.length+' request(s) analisadas';$('scanSummary').textContent='Resultados simulados sobre dois endpoints de exemplo. Match é ranking; aderência é comparador estrutural, sem execução.';
+ $('sourceCacheStatus').textContent=`Busca de ${state.source==='curl'?'cURL':'collection'} preservada ao alternar as abas · ${cache.queries.length} request(s).`;
+ cache.queries.forEach((q,i)=>{
+  const heading=document.createElement('div');heading.className='match-category';heading.innerHTML=`<b style="color:#dfae8d">${escapeText(q.method+' '+q.path)}</b> · ${escapeText(q.name||'Request '+(i+1))}`;holder.appendChild(heading);
+  const receive=document.createElement('div');receive.className='match-category';receive.textContent='↘ RECEBEM / CONTROLLERS';holder.appendChild(receive);holder.appendChild(makeMatchCard(q,'controller'));
+  const send=document.createElement('div');send.className='match-category';send.textContent='↗ ENVIAM / FEIGN CLIENTS';holder.appendChild(send);holder.appendChild(makeMatchCard(q,'feign'));
+ });
+}
+runSearch=function(){
+ let queries=[];
+ try{
+  if(state.source==='curl'){
+   if(!$('curlText').value.trim())throw Error('Cole um cURL antes de localizar.');queries=[parseCurl($('curlText').value)];
+  }else{if(!state.collection.length)throw Error('Carregue uma collection JSON antes de localizar.');queries=[...state.collection];}
+ }catch(e){toast('Entrada inválida: '+e.message);$('scanSummary').textContent='Entrada inválida: '+e.message;return;}
+ LAB.cache[state.source]={queries};state.scanRun=true;renderSearchCache();toast('Análise estática demonstrativa pronta. Sem request HTTP.');
+};
+chooseSource=function(src){state.source=src;$('sourceCurlTab').classList.toggle('active',src==='curl');$('sourceCollectionTab').classList.toggle('active',src==='collection');$('sourceCurl').hidden=src!=='curl';$('sourceCollection').hidden=src!=='collection';renderSearchCache();};
+loadCurlFile=async function(input){const file=input.files?.[0];if(!file)return;try{$('curlText').value=await file.text();chooseSource('curl');toast('cURL carregado localmente: '+file.name)}catch(e){toast('Falha ao abrir cURL: '+e.message)}input.value='';};
+// Resize input/results splitter without depending on the IntelliJ runtime.
+(function initSplitter(){let active=false,origin=0,initial=0;const handle=$('searchDivider'),entry=$('searchEntry');
+ handle.addEventListener('pointerdown',e=>{active=true;origin=e.clientY;initial=entry.getBoundingClientRect().height;handle.setPointerCapture(e.pointerId);});
+ handle.addEventListener('pointermove',e=>{if(!active)return;entry.style.height=Math.max(175,Math.min(550,initial+e.clientY-origin))+'px';});
+ handle.addEventListener('pointerup',()=>active=false);handle.addEventListener('pointercancel',()=>active=false);
+ handle.addEventListener('keydown',e=>{if(!['ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();const h=entry.getBoundingClientRect().height;entry.style.height=Math.max(175,Math.min(550,h+(e.key==='ArrowDown'?24:-24)))+'px';});
+})();
+// Live Java fixture editor: edits demonstrative annotation values; not full Java parser.
+function toggleJavaEditor(){
+ LAB.editing=!LAB.editing;
+ const area=$('javaEdit'),code=$('javaCode');
+ if(LAB.editing){area.value=state.endpoint==='feign'?feignCode(state.fixed):controllerCode;LAB.originalJava=area.value;area.style.display='block';code.style.display='none';$('editJavaBtn').textContent='✓ Fechar editor demonstrativo';area.focus();toast('Edite @JsonProperty("codigoIsbn") para @JsonProperty("isbn").');}
+ else{area.style.display='none';code.style.display='block';$('editJavaBtn').textContent='✎ Editar Java de exemplo';renderJava();}
+}
+function syncJavaInput(){
+ if(!LAB.editing||state.endpoint!=='feign')return;
+ const code=$('javaEdit').value,match=code.match(/@JsonProperty\s*\(\s*"([^"]*)"\s*\)\s*String\s+isbn/);
+ if(!match){$('previewStatus').textContent='◌ Java incompleto · mantendo última prévia';$('javaEdit').classList.add('incomplete');return;}
+ $('javaEdit').classList.remove('incomplete');
+ if(!['isbn','codigoIsbn'].includes(match[1])){$('previewStatus').textContent='◌ Nome customizado · fixture limitada';toast('Este laboratório reconhece apenas isbn e codigoIsbn neste DTO de exemplo.');return;}
+ state.fixed=match[1]==='isbn';$('fixDtoBtn').textContent=state.fixed?'↶ Reverter alteração simulada':'✦ Simular correção @JsonProperty';renderPreview();compareContracts(false);
+ $('syncStatus').textContent='Live sync · fixture atualizada';$('previewStatus').textContent='● JSON sincronizado (demo)';
+}
+$('javaEdit').addEventListener('input',()=>{clearTimeout(LAB.javaTimer);$('previewStatus').textContent='◌ Editando Java…';LAB.javaTimer=setTimeout(syncJavaInput,350)});
+// Keep the editable fixture stable while navigating and reflect the pinned method.
+const originalChoose=chooseEndpoint;
+chooseEndpoint=function(endpoint,force=false){
+ if(LAB.editing){LAB.editing=false;$('javaEdit').style.display='none';$('javaCode').style.display='block';$('editJavaBtn').textContent='✎ Editar Java de exemplo';}
+ originalChoose(endpoint,force);if($('contractInput').value.trim())compareContracts(false);
+};
+// Keep the UI honest: changing the fixture is an illustration of PSI behavior.
+const originalToggleDto=toggleDto;
+toggleDto=function(){if(LAB.editing){LAB.editing=false;$('javaEdit').style.display='none';$('javaCode').style.display='block';$('javaCode').closest('.code-area').style.display='block';$('editJavaBtn').textContent='✎ Editar Java de exemplo';}originalToggleDto();setTimeout(()=>{if(LAB.cache.curl||LAB.cache.collection)renderSearchCache();compareContracts(false);},380)};
+const models={
+ record:{code:'record LivroParaBiblioteca(@NotBlank String titulo, @NotNull Integer anoPublicacao, @JsonProperty("isbn") String isbn) {}',json:{titulo:'texto',anoPublicacao:0,isbn:'texto'},notes:'@NotBlank e @NotNull indicam obrigatoriedade. @JsonProperty redefine o nome serializado. Sem executar o Jackson.'},
+ inherit:{code:'class BaseDTO { UUID id; }\nclass LivroDTO extends BaseDTO { String titulo; }\nclass Envelope<T> { T valor; }',json:{id:'00000000-0000-0000-0000-000000000000',titulo:'texto',valor:{titulo:'texto'}},notes:'Exemplo representativo de campos herdados e resolução de generics. A profundidade e o contexto dos tipos reais dependem de PSI Java.'},
+ collection:{code:'record Pacote(String[] tags, List<LivroDTO> itens, Map<String,Integer> contagem, Optional<String> observacao) {}',json:{tags:['texto'],itens:[{titulo:'texto'}],contagem:{chave:0},observacao:'texto'},notes:'Arrays, listas, mapas e Optional são expandidos esquematicamente. O exemplo não contém valores reais.'},
+ wrappers:{code:'ResponseEntity<List<LivroDTO>>\nHttpEntity<LivroDTO>\nCompletableFuture<LivroDTO>\nMono<LivroDTO>\nFlux<LivroDTO>',json:{responseEntity:{content:[{titulo:'texto'}]},httpEntity:{titulo:'texto'},completableFuture:{titulo:'texto'},mono:{titulo:'texto'},flux:[{titulo:'texto'}]},notes:'A tool window procura desembrulhar tipos de retorno; no HTML são prévias didáticas, não resoluções PSI de um projeto.'},
+ nullable:{code:'record Usuario(@JsonIgnore String senha, @Nullable String apelido, Status status) {}\nenum Status { ATIVO, INATIVO }',json:{apelido:null,status:'ATIVO'},notes:'@JsonIgnore exclui campo. @Nullable sugere null. Enums e @JsonIgnoreProperties têm suporte parcial; Jackson customizado pode divergir.'}
+};
+function renderModelLab(key){const m=models[key]||models.record;$('modelCaption').textContent=m.code;$('modelPreview').innerHTML=jsonHighlight(JSON.stringify(m.json,null,2));$('modelNotes').textContent=m.notes;}
+const mappingSamples={
+ ok:{code:'dto.setNomeCompleto(cliente.getNomeCompleto());\nbibliotecaClient.criar(dto);',finding:'Nenhum conflito de origem sugerido nesta atribuição direta. Evidência estática, não garantia em runtime.',ok:true},
+ wrong:{code:'dto.setNomeCompleto(cliente.getIdade());\nbibliotecaClient.criar(dto);',finding:'⚠ $.nomeCompleto — possível erro de mapeamento: atribuição de cliente.getIdade() para nomeCompleto.',ok:false},
+ suffix:{code:'record Request(String idNome) {}\n// Receptor: required ["nomeId"]',finding:'⚠ $.nomeId — possível correção de nomenclatura: idNome → nomeId (mover sufixo Id).',ok:false},
+ indirect:{code:'dto = livroMapper.map(entity);\nbibliotecaClient.criar(dto);',finding:'⚠ A origem dos valores não é comprovada. Mappers ou transformações indiretas exigem inspeção complementar.',ok:false}
+};
+function renderMappingLab(key){const m=mappingSamples[key]||mappingSamples.ok;$('mappingCode').textContent=m.code;$('mappingFinding').textContent=m.finding;$('mappingFinding').style.borderColor=m.ok?'#315d4c':'#765039';}
+const coverage=[
+ ['Navegação principal','Request, Response, Localizar e Detalhes; acesso por botões e atalhos.','implemented','preview'],
+ ['Prévia JSON / Schema','Alterna payload e estrutura, com cópia e highlight; dados ilustrativos.','implemented','preview'],
+ ['Endpoints Java e anotações','Visualizar controller, Feign, caminhos, verbo HTTP e parâmetros. PSI real não roda no HTML.','simulated','details'],
+ ['Atualização live e fixação','Debounce de 350ms no exemplo Java, preservação de seleção fixada e troca de método.','simulated','preview'],
+ ['DTOs, records, herança e wrappers','Catálogo navegável de tipos, wrappers e anotações de serialização.','simulated','details'],
+ ['Parser cURL','Flags -X/--request, --url, -d/--data*, -G e -I; bloqueia --data-urlencode.','implemented','search'],
+ ['Importação Postman / Insomnia','Leitura local de exportações JSON e prévia formatada de cada request.','implemented','search'],
+ ['Resultado por origem e redimensionamento','Busca individual por request, cache independente cURL/collection e drag handle.','implemented','search'],
+ ['Ranking separado de aderência','Score match (/100) distinto da aderência estimada (%) por candidato.','simulated','search'],
+ ['Comparação JSON / JSON Schema','Campos ausentes/extras, tipos, required, enums, nullable e additionalProperties.','implemented','compare'],
+ ['OpenAPI JSON/YAML','Extração demonstrativa de request e response 3.x e $ref local; limitações documentadas.','implemented','compare'],
+ ['Edição de contrato ao vivo','Recomparação após digitar; estados de erro e mensagens de achado.','implemented','compare'],
+ ['Feign: origens e renomeação Id','Cenários de setters/atribuições, conflitos e limitações de mappers.','simulated','details'],
+ ['Temas, fontes e idioma','Midnight, Base16 e Ocean; tamanhos independentes e preferências locais.','implemented','coverage'],
+ ['Privacidade e limitações','HTML offline sem IA, requests ou execução da aplicação; comportamentos reais documentados.','implemented','coverage'],
+ ['PSI Java, índices e navegação nativa','Não acessa arquivos e índices internos da IDE nem resolve tipos Java reais.','native','preview'],
+ ['Rastreamento integral e runtime','Não rastreia Controller → Service → Mapper → HTTP nem verifica a serialização executada.','native','details']
+];
+function renderCoverage(){
+ const list=$('coverageList');list.innerHTML='<div class="lab-coverage-progress" id="coverageProgress"></div>';
+ coverage.forEach(([name,desc,status,route],i)=>{
+  const item=document.createElement('div');item.className='lab-coverage-item';
+  const pill=status==='implemented'?'TESTÁVEL NO HTML':status==='simulated'?'SIMULAÇÃO UX':'DEPENDE DO PLUGIN';
+  item.innerHTML=`<div class="lab-coverage-top"><b>${escapeText(name)}</b><span class="lab-status ${status}">${pill}</span></div><p>${escapeText(desc)}</p><div class="lab-coverage-tags"><button class="secondary" onclick="navigate('${route}')">Explorar fluxo</button><label><input type="checkbox" data-review="${i}" ${LAB.review[i]?'checked':''}/> Revisado</label></div>`;
+  list.appendChild(item);
+ });
+ list.querySelectorAll('[data-review]').forEach(e=>e.addEventListener('change',()=>{LAB.review[e.dataset.review]=e.checked;try{localStorage.setItem('jsonlens-coverage-v2',JSON.stringify(LAB.review))}catch{}updateCoverageProgress()}));
+ updateCoverageProgress();
+}
+function updateCoverageProgress(){const count=Object.values(LAB.review).filter(Boolean).length,total=coverage.length;$('coverageProgress').textContent=`Revisados: ${count} / ${total} fluxos e restrições · marque os pontos validados por sua equipe.`;}
+function downloadReview(){const textLines=['JSON Lens · revisão de UX', 'Validação do protótipo HTML / IntelliJ', '',...coverage.map(([name,desc,status],i)=>`${LAB.review[i]?'[x]':'[ ]'} ${name} (${status})\n    ${desc}`),'','Observação: a análise PSI, ranking real e runtime não são executados no HTML.'];const blob=new Blob([textLines.join('\n')],{type:'text/plain;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='json-lens-ux-checklist.txt';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),0);toast('Checklist exportado.');}
+function resetDemo(){LAB.cache={curl:null,collection:null};LAB.review={};state.collection=[];state.fixed=false;state.pinned=false;state.endpoint='feign';$('fixDtoBtn').textContent='✦ Simular correção @JsonProperty';$('syncStatus').textContent='Live sync · alterações monitoradas';$('javaEdit').style.display='none';$('javaCode').style.display='block';LAB.editing=false;$('pinBtn').textContent='♧  Fixar';$('pinBtn').classList.remove('on');chooseEndpoint('feign',true);loadCurlExample();useContractPreset('schema');renderCollectionPreview('Nenhuma collection carregada');chooseSource('curl');renderCoverage();navigate('preview');toast('Demonstração reiniciada.');}
+// Appearance preferences stored in localStorage (demo); IntelliJ plugin uses its own IDE storage.
+const PREF_DEFAULT={languagePref:'pt',themePref:'ember',infoFontPref:'ui',infoSizePref:'13',jsonFontPref:'mono',jsonSizePref:'15',curlFontPref:'mono',curlSizePref:'12'};
+const I18N={
+ 'Preview':'Preview','Localizar':'Find','Contratos':'Contracts','Detalhes':'Details','Cobertura':'Coverage',
+ 'Request':'Request','Response':'Response','Copiar':'Copy','Mostrar schema':'Show schema','Fixar':'Pin',
+ 'Comparar com contrato':'Compare with contract','Ver detalhes':'View details','Localizar no código':'Find in code',
+ 'Abrir .txt / .curl':'Open .txt / .curl','Usar exemplo':'Use example',
+ 'Expandir':'Expand','Recolher':'Collapse','Colar contrato':'Paste contract','Abrir código ↗':'Open code ↗',
+ 'Validar contrato':'Validate contract','Restaurar exemplo':'Reset example','Voltar ao JSON':'Back to JSON','Localizar integrações':'Find integrations',
+ 'Preferências do JSON Lens':'JSON Lens preferences','Concluído':'Done','Idioma':'Language','Tema':'Theme',
+ 'Fonte de informações':'Information font','Fonte JSON':'JSON font','Fonte cURL':'cURL font',
+ 'Aderência de contrato':'Contract adherence','Localizar interação':'Find interaction','Detalhes técnicos':'Technical details','Matriz de cobertura':'Coverage checklist',
+ 'Selecionar método':'Select method','Acompanhando o editor':'Following editor','Configurações':'Settings',
+ 'Comparar:':'Compare:','Exemplo Postman v2.1':'Postman v2.1 example','Exemplo Insomnia':'Insomnia example',
+ 'Carregar collection JSON…':'Import collection JSON…','Explorar fluxo':'Explore flow','Revisado':'Reviewed',
+ 'Exportar checklist da revisão':'Export review checklist','Reiniciar demonstração':'Reset demonstration',
+ 'JSON de exemplo e Schema':'Example JSON and schema', 'AÇÕES DE INSPEÇÃO':'INSPECTION ACTIONS',
+ 'CATÁLOGO DE MODELOS · PRÉVIAS ILUSTRATIVAS':'JAVA MODEL CATALOG · ILLUSTRATIVE PREVIEWS',
+ 'FEIGN · ORIGEM DE VALORES':'FEIGN · VALUE ORIGINS','LIMITAÇÕES IMPORTANTES':'IMPORTANT LIMITATIONS'
+};
+const translations=new WeakMap();
+function applyLanguage(lang){
+ const scan=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let node;
+ while(node=scan.nextNode()){
+  const parent=node.parentElement;if(!parent||['SCRIPT','STYLE','PRE','CODE','TEXTAREA','OPTION'].includes(parent.tagName))continue;
+  if(!translations.has(node))translations.set(node,node.nodeValue);
+  const original=translations.get(node),str=original.trim();
+  if(!(str in I18N))continue;
+  node.nodeValue=lang==='en'?original.replace(str,I18N[str]):original;
+ }
+ document.documentElement.lang=lang==='en'?'en':'pt-BR';
+}
+function savePreferences(){
+ const prefs={};Object.keys(PREF_DEFAULT).forEach(key=>prefs[key]=$(key)?.value||PREF_DEFAULT[key]);
+ LAB.prefs=prefs;document.documentElement.dataset.theme=prefs.themePref;
+ const root=document.documentElement;
+ root.style.setProperty('--info-font',prefs.infoFontPref==='mono'?"'JetBrains Mono', Consolas, monospace":prefs.infoFontPref==='serif'?'Georgia, serif':"'Inter','Segoe UI',system-ui,sans-serif");
+ root.style.setProperty('--json-font',prefs.jsonFontPref==='mono'?"'JetBrains Mono',Consolas,monospace":"Consolas,'Segoe UI',monospace");
+ root.style.setProperty('--curl-font',prefs.curlFontPref==='mono'?"'JetBrains Mono',Consolas,monospace":"Consolas,'Segoe UI',monospace");
+ root.style.setProperty('--info-size',prefs.infoSizePref+'px');root.style.setProperty('--json-size',prefs.jsonSizePref+'px');root.style.setProperty('--curl-size',prefs.curlSizePref+'px');
+ applyLanguage(prefs.languagePref);
+ try{localStorage.setItem('jsonlens-prefs-v2',JSON.stringify(prefs));}catch{}
+}
+function loadPreferences(){let stored={};try{stored=JSON.parse(localStorage.getItem('jsonlens-prefs-v2')||'{}')}catch{}const prefs={...PREF_DEFAULT,...stored};Object.keys(prefs).forEach(key=>{if($(key))$(key).value=prefs[key]});savePreferences();try{LAB.review=JSON.parse(localStorage.getItem('jsonlens-coverage-v2')||'{}')}catch{LAB.review={}};}
+const originalNavigate=navigate;
+navigate=function(view){originalNavigate(view);if(view==='coverage')renderCoverage();if(view==='search')renderSearchCache();if(view==='details'){renderModelLab($('modelPreset').value);renderMappingLab($('mappingPreset').value);}};
+// Explicit UI confirmation that the Java source cannot be parsed fully here.
+$('editJavaBtn').title='Apenas edição demonstrativa do @JsonProperty no BibliotecaClient.java';
+// Mobile and accessibility: keyboard navigation for splitter and copy.
+$('contractInput').setAttribute('aria-label','Editor local do contrato');
+$('collectionPreview').setAttribute('aria-label','Prévia formatada da collection carregada');
+// Correct editor mode is the entire code area, not just the preformatted code rows.
+const oldToggleEditor=toggleJavaEditor;
+toggleJavaEditor=function(){oldToggleEditor();const area=$('javaEdit'),container=$('javaCode').closest('.code-area');container.style.display=LAB.editing?'none':'block';if(LAB.editing){area.style.display='block';area.style.flex='1';}else{area.style.display='none';}};
+const switchEndpoint=chooseEndpoint;
+chooseEndpoint=function(ep,force=false){switchEndpoint(ep,force);$('javaCode').closest('.code-area').style.display='block';};
+// Fix demo auto-recomparison on JS edit and changed DTO without falsely claiming PSI integration.
+$('liveCompareStatus').textContent='● Recomparação em 350ms · local';
+loadPreferences();renderModelLab('record');renderMappingLab('ok');renderCoverage();
+useContractPreset('schema');renderCollectionPreview('Nenhuma collection carregada');chooseSource('curl');
+$('contractInput').addEventListener('input',scheduleLiveCompare);
+</script>
+</body></html>
