@@ -14,14 +14,14 @@ public final class LensToolWindowFactory implements ToolWindowFactory {
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
         if (JBCefApp.isSupported()) {
             LensWebPanel panel = new LensWebPanel(project);
-            Content content = ContentFactory.getInstance().createContent(panel.component(), "JSON Lens", false);
+            Content content = ContentFactory.getInstance().createContent(panel.component(), "WContract", false);
             content.setDisposer(panel);
             toolWindow.getContentManager().addContent(content);
             panel.start();
         } else {
             // Browser-less or custom JBR: preserve the existing fully local Swing workflow.
             LensPanel fallback = new LensPanel(project);
-            Content content = ContentFactory.getInstance().createContent(fallback.component(), "JSON Lens (Swing)", false);
+            Content content = ContentFactory.getInstance().createContent(fallback.component(), "WContract (Swing)", false);
             content.setDisposer(fallback);
             toolWindow.getContentManager().addContent(content);
             fallback.start();
