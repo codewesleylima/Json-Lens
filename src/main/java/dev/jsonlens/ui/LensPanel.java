@@ -17,6 +17,9 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.util.PsiModificationTracker;
 import com.intellij.util.concurrency.AppExecutorUtil;
+import com.intellij.ui.components.JBTabbedPane;
+import com.intellij.ui.JBColor;
+import com.intellij.util.ui.JBUI;
 import dev.jsonlens.analysis.JavaEndpointInspector;
 import dev.jsonlens.contract.ContractComparator;
 import dev.jsonlens.contract.ContractParser;
@@ -47,7 +50,7 @@ import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
-import javax.swing.JTabbedPane;
+import javax.swing.SwingConstants;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.UIManager;
@@ -59,18 +62,18 @@ import javax.swing.event.DocumentListener;
 /** UI subscriptions are bound to the content disposer; analysis never blocks the EDT. */
 public final class LensPanel implements Disposable {
     private final Project project;
-    private final JPanel root = new JPanel(new BorderLayout(0, 10));
+    private final JPanel root = new JPanel(new BorderLayout(0, 12));
     private final JLabel title = new JLabel("JSON Lens");
     private final JLabel endpointTitle = new JLabel("Selecione um endpoint");
     private final JLabel endpoint = new JLabel("Sem endpoint selecionado");
     private final JLabel status = new JLabel("Aguardando análise...");
     private final JComboBox<JavaEndpointInspector.Option> methods = new JComboBox<>();
     private final JComboBox<String> checkTarget = new JComboBox<>(new String[] {"Request", "Response"});
-    private final JCheckBox schemaView = new JCheckBox("Mostrar esquema (em vez de exemplos)");
-    private final JTextArea requestView = textArea();
-    private final JTextArea responseView = textArea();
-    private final JTextArea findingsView = textArea();
-    private final JTextArea notesView = textArea();
+    private final JCheckBox schemaView = new JCheckBox("Mostrar schema");
+    private final JTextArea requestView = textArea(15);
+    private final JTextArea responseView = textArea(15);
+    private final JTextArea findingsView = textArea(12);
+    private final JTextArea notesView = textArea(12);
     private final JTextField contractRoute = new JTextField(18);
     private final JTextField contractVerb = new JTextField(5);
     private final JLabel contractFileLabel = new JLabel("Sem contrato importado");
@@ -98,23 +101,39 @@ public final class LensPanel implements Disposable {
     public LensPanel(Project project) {
         this.project = project;
         this.state = PropertiesComponent.getInstance(project);
-        root.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-        root.setPreferredSize(new Dimension(380, 640));
-        title.setFont(title.getFont().deriveFont(Font.BOLD, 16f));
-        JLabel subtitle = new JLabel("Live API contracts");
+        root.setBorder(JBUI.Borders.empty(12));
+        root.setPreferredSize(new Dimension(JBUI.scale(420), JBUI.scale(640)));
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 17f));
+        JLabel subtitle = new JLabel("Inspeção local de contratos API");
         subtitle.setForeground(uiColor("Label.disabledForeground", Color.GRAY));
-        subtitle.setFont(subtitle.getFont().deriveFont(11f));
+        subtitle.setFont(subtitle.getFont().deriveFont(12f));
         JPanel brand = new JPanel();
         brand.setOpaque(false);
         brand.setLayout(new BoxLayout(brand, BoxLayout.Y_AXIS));
+        brand.add(eyebrow("DEVELOPER TOOL"));
+        brand.add(javax.swing.Box.createVerticalStrut(2));
         brand.add(title);
+        brand.add(javax.swing.Box.createVerticalStrut(2));
         brand.add(subtitle);
         JPanel heading = new JPanel(new BorderLayout(8, 0));
         heading.setOpaque(false);
-        heading.add(brand, BorderLayout.WEST);
+        JLabel mark = new JLabel("JL", SwingConstants.CENTER);
+        mark.setOpaque(true);
+        mark.setForeground(Color.WHITE);
+        mark.setBackground(new JBColor(new Color(0x426B91), new Color(0x315B81)));
+        mark.setFont(mark.getFont().deriveFont(Font.BOLD, 12f));
+        mark.setPreferredSize(new Dimension(JBUI.scale(34), JBUI.scale(34)));
+        mark.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
+        JPanel identity = new JPanel(new BorderLayout(10, 0));
+        identity.setOpaque(false);
+        identity.add(mark, BorderLayout.WEST);
+        identity.add(brand, BorderLayout.CENTER);
+        heading.add(identity, BorderLayout.WEST);
+        status.setOpaque(true);
+        status.setBackground(new JBColor(new Color(0x34373D), new Color(0xEEF1F5)));
         status.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(uiColor("Component.borderColor", uiColor("Separator.foreground", Color.GRAY))),
-            BorderFactory.createEmptyBorder(4, 8, 4, 8)));
+            BorderFactory.createEmptyBorder(5, 9, 5, 9)));
         status.setForeground(uiColor("Label.disabledForeground", Color.GRAY));
         status.setFont(status.getFont().deriveFont(11f));
         heading.add(status, BorderLayout.EAST);
@@ -122,11 +141,14 @@ public final class LensPanel implements Disposable {
         endpointTitle.setFont(endpointTitle.getFont().deriveFont(Font.BOLD, 13f));
         endpoint.setForeground(uiColor("Label.disabledForeground", Color.GRAY));
         JPanel endpointCard = new JPanel();
-        endpointCard.setOpaque(false);
+        endpointCard.setOpaque(true);
+        endpointCard.setBackground(new JBColor(new Color(0x2D3036), new Color(0xF6F7F9)));
         endpointCard.setLayout(new BoxLayout(endpointCard, BoxLayout.Y_AXIS));
         endpointCard.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(uiColor("Component.borderColor", uiColor("Separator.foreground", Color.GRAY))),
-            BorderFactory.createEmptyBorder(9, 10, 9, 10)));
+            BorderFactory.createEmptyBorder(10, 12, 10, 12)));
+        endpointCard.add(eyebrow("ENDPOINT SELECIONADO"));
+        endpointCard.add(javax.swing.Box.createVerticalStrut(5));
         endpointTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
         endpoint.setAlignmentX(Component.LEFT_ALIGNMENT);
         endpointCard.add(endpointTitle);
@@ -137,35 +159,41 @@ public final class LensPanel implements Disposable {
         top.setOpaque(false);
         top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
         top.add(heading);
-        top.add(javax.swing.Box.createVerticalStrut(10));
+        top.add(javax.swing.Box.createVerticalStrut(12));
         top.add(endpointCard);
+        top.add(javax.swing.Box.createVerticalStrut(4));
         top.add(row(new JLabel("Método"), methods, pinButton));
         top.add(row(schemaView,
             button("Copiar request", e -> copy(currentRequest)),
             button("Copiar response", e -> copy(currentResponse))));
         root.add(top, BorderLayout.NORTH);
 
-        JTabbedPane tabs = new JTabbedPane();
+        JBTabbedPane tabs = new JBTabbedPane();
         requestView.setText("Abra um controller Spring MVC...");
         responseView.setText("Selecione um método para visualizar o response...");
-        tabs.addTab("Request", new JScrollPane(requestView));
-        tabs.addTab("Response", new JScrollPane(responseView));
+        tabs.addTab("Request", codeScrollPane(requestView));
+        tabs.addTab("Response", codeScrollPane(responseView));
 
         JPanel contractPane = new JPanel(new BorderLayout(5, 5));
+        contractPane.setOpaque(false);
         JPanel contractHeader = new JPanel();
+        contractHeader.setOpaque(false);
         contractHeader.setLayout(new BoxLayout(contractHeader, BoxLayout.Y_AXIS));
-        contractHeader.add(row(button("Importar JSON/YAML", this::chooseContract), button("Remover", e -> clearContract())));
-        contractHeader.add(row(new JLabel("Contratos:"), availableContracts));
+        contractHeader.setBorder(JBUI.Borders.empty(8, 0, 10, 0));
+        contractHeader.add(row(button("Importar contrato", this::chooseContract), button("Remover", e -> clearContract())));
+        contractHeader.add(row(new JLabel("Contrato"), availableContracts));
+        contractFileLabel.setForeground(uiColor("Label.disabledForeground", Color.GRAY));
         contractHeader.add(row(contractFileLabel));
-        contractHeader.add(row(new JLabel("Comparar:"), checkTarget, new JLabel("Método:"), contractVerb));
-        contractHeader.add(row(new JLabel("Path externo (vazio = rota local):"), contractRoute));
+        contractHeader.add(row(new JLabel("Comparar"), checkTarget, new JLabel("Método"), contractVerb));
+        contractHeader.add(row(new JLabel("Path externo (vazio = rota local)"), contractRoute));
         contractPane.add(contractHeader, BorderLayout.NORTH);
         findingsView.setText("Importe um contrato da aplicação de destino para verificar a compatibilidade.");
-        contractPane.add(new JScrollPane(findingsView), BorderLayout.CENTER);
+        contractPane.add(codeScrollPane(findingsView), BorderLayout.CENTER);
         tabs.addTab("Comparação", contractPane);
         notesView.setRows(5);
         notesView.setText("Avisos e parâmetros de rota/query aparecerão aqui.");
-        tabs.addTab("Detalhes", new JScrollPane(notesView));
+        tabs.addTab("Detalhes", codeScrollPane(notesView));
+        tabs.setBorder(JBUI.Borders.emptyTop(4));
         root.add(tabs, BorderLayout.CENTER);
 
         refreshTimer = new Timer(350, e -> refresh());
@@ -424,14 +452,28 @@ public final class LensPanel implements Disposable {
         responseView.setCaretPosition(0);
     }
 
-    private static JTextArea textArea() {
+    private static JTextArea textArea(int fontSize) {
         JTextArea area = new JTextArea();
         area.setEditable(false);
-        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, fontSize));
         area.setTabSize(2);
         area.setLineWrap(false);
-        area.setMargin(new java.awt.Insets(10, 12, 10, 12));
+        area.setMargin(new java.awt.Insets(12, 14, 12, 14));
+        area.setBackground(uiColor("TextArea.background", uiColor("Panel.background", Color.WHITE)));
+        area.setForeground(uiColor("TextArea.foreground", uiColor("Label.foreground", Color.BLACK)));
         return area;
+    }
+    private static JLabel eyebrow(String text) {
+        JLabel label = new JLabel(text);
+        label.setForeground(uiColor("Label.disabledForeground", Color.GRAY));
+        label.setFont(label.getFont().deriveFont(Font.BOLD, 10f));
+        return label;
+    }
+    private static JScrollPane codeScrollPane(JTextArea area) {
+        JScrollPane pane = new JScrollPane(area);
+        pane.setBorder(BorderFactory.createLineBorder(uiColor("Component.borderColor", uiColor("Separator.foreground", Color.GRAY))));
+        pane.getViewport().setBackground(area.getBackground());
+        return pane;
     }
     private static Color uiColor(String key, Color fallback) {
         Color color = UIManager.getColor(key);
