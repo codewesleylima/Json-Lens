@@ -58,6 +58,7 @@ public final class LensWebPanel implements Disposable {
     private final AtomicLong collectionScanGeneration = new AtomicLong();
     private final AtomicLong compareGeneration = new AtomicLong();
     private final Map<Integer, JavaEndpointInspector.EndpointCandidate> candidates = new HashMap<>();
+    private final Map<String, List<Integer>> candidateIdsBySource = new HashMap<>();
     private final Map<String, JsonObject> priorScans = new HashMap<>();
     private final Map<String, String> priorInputs = new HashMap<>();
     private int candidateId = 0;
@@ -307,7 +308,16 @@ public final class LensWebPanel implements Disposable {
         }).inSmartMode(project).expireWith(this).coalesceBy(this, "search", source)
             .finishOnUiThread(ModalityState.any(), result -> {
                 if (disposed || generation != sequence.get()) return;
-                JsonObject payload = LensWebSearch.toJson(source, result, this::registerCandidate);
+                List<Integer> newIds = new ArrayList<>();
+                JsonObject payload = LensWebSearch.toJson(source, result, candidate -> {
+                    int id = registerCandidate(candidate);
+                    newIds.add(id);
+                    return id;
+                });
+                for (Integer previous : candidateIdsBySource.getOrDefault(source, List.of())) {
+                    candidates.remove(previous);
+                }
+                candidateIdsBySource.put(source, List.copyOf(newIds));
                 priorScans.put(source, payload);
                 send(payload);
             }).submit(AppExecutorUtil.getAppExecutorService());
