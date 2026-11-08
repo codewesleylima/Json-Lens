@@ -139,6 +139,74 @@ public final class JavaEndpointInspectorTest extends LightJavaCodeInsightFixture
         assertTrue(snapshot.parameterNotes.stream().anyMatch(note -> note.startsWith("query:")));
     }
 
+    public void testProjectScanFindsControllerAndFeignEndpoints() {
+        myFixture.addFileToProject("sample/SearchController.java", """
+            package sample;
+            import org.springframework.web.bind.annotation.PostMapping;
+            import org.springframework.web.bind.annotation.RestController;
+            @RestController
+            class SearchController {
+                @PostMapping(path = "/search")
+                Object search() { return null; }
+            }
+            """);
+        myFixture.addFileToProject("sample/SearchClient.java", """
+            package sample;
+            import org.springframework.cloud.openfeign.FeignClient;
+            import org.springframework.web.bind.annotation.PostMapping;
+            @FeignClient(name = "search")
+            interface SearchClient {
+                @PostMapping(path = "/search")
+                Object search();
+            }
+            """);
+
+        var endpoints = ReadAction.compute(() -> new JavaEndpointInspector(getProject()).inspectAll());
+
+        assertTrue(endpoints.stream().anyMatch(endpoint -> endpoint.snapshot().direction.startsWith("INBOUND")));
+        assertTrue(endpoints.stream().anyMatch(endpoint -> endpoint.snapshot().direction.startsWith("OUTBOUND")));
+    }
+
+    public void testProjectScanDetectsSetterValueMappedFromDifferentSourceField() {
+        myFixture.addFileToProject("sample/MappingClient.java", """
+            package sample;
+            import org.springframework.cloud.openfeign.FeignClient;
+            import org.springframework.web.bind.annotation.PostMapping;
+            import org.springframework.web.bind.annotation.RequestBody;
+
+            @FeignClient(name = "mapping")
+            interface MappingClient {
+                @PostMapping(path = "/customers")
+                void send(@RequestBody CustomerRequest request);
+            }
+            class CustomerRequest {
+                public void setNomeCompleto(String value) {}
+            }
+            class CustomerSource {
+                String getIdade() { return "42"; }
+            }
+            class CustomerService {
+                private MappingClient client;
+                void send(CustomerSource source) {
+                    CustomerRequest request = new CustomerRequest();
+                    request.setNomeCompleto(source.getIdade());
+                    client.send(request);
+                }
+            }
+            """);
+
+        var endpoints = ReadAction.compute(() -> new JavaEndpointInspector(getProject()).inspectAll());
+        var client = endpoints.stream()
+            .filter(endpoint -> endpoint.snapshot().title.equals("MappingClient.send()"))
+            .findFirst()
+            .orElseThrow();
+
+        assertTrue(client.valueMappings().stream().anyMatch(mapping ->
+            mapping.targetField().equals("nomeCompleto")
+                && mapping.sourceField().equals("idade")
+                && mapping.hasDifferentSource()));
+    }
+
     private JavaEndpointInspector.Inspection inspect(PsiFile file, String marker) {
         int offset = file.getText().indexOf(marker);
         assertTrue(offset >= 0);

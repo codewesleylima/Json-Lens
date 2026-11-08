@@ -2,14 +2,18 @@ package dev.jsonlens.analysis;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.psi.search.FilenameIndex;
+import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiAnnotation;
+import com.intellij.psi.PsiAssignmentExpression;
 import com.intellij.psi.PsiArrayInitializerMemberValue;
 import com.intellij.psi.PsiArrayType;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiClassType;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiEnumConstant;
+import com.intellij.psi.PsiExpression;
 import com.intellij.psi.PsiField;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiJavaFile;
@@ -20,12 +24,17 @@ import com.intellij.psi.PsiModifier;
 import com.intellij.psi.PsiModifierListOwner;
 import com.intellij.psi.PsiParameter;
 import com.intellij.psi.PsiPrimitiveType;
+import com.intellij.psi.PsiReference;
+import com.intellij.psi.PsiReferenceExpression;
 import com.intellij.psi.PsiRecordComponent;
 import com.intellij.psi.PsiSubstitutor;
 import com.intellij.psi.PsiType;
+import com.intellij.psi.PsiVariable;
 import com.intellij.psi.PsiWildcardType;
 import com.intellij.psi.PsiManager;
 import com.intellij.psi.util.PsiTreeUtil;
+import com.intellij.openapi.progress.ProgressManager;
+import com.intellij.psi.search.searches.ReferencesSearch;
 import dev.jsonlens.model.EndpointSnapshot;
 import dev.jsonlens.model.SchemaNode;
 import java.util.ArrayList;
@@ -40,8 +49,133 @@ import java.util.Set;
 public final class JavaEndpointInspector {
     public record Inspection(List<Option> options, String selectedKey, EndpointSnapshot snapshot, String note) {}
     public record Option(String key, String label) { @Override public String toString() { return label; } }
+    public record ValueMapping(String targetField, String sourceField, String expression) {
+        public boolean hasDifferentSource() {
+            return sourceField != null && !normalizeName(targetField).equals(normalizeName(sourceField));
+        }
+    }
+    public record EndpointCandidate(EndpointSnapshot snapshot, VirtualFile file, int offset, List<ValueMapping> valueMappings) {
+        public EndpointCandidate(EndpointSnapshot snapshot, VirtualFile file, int offset) {
+            this(snapshot, file, offset, List.of());
+        }
+    }
     private final Project project;
     public JavaEndpointInspector(Project project) { this.project = project; }
+
+    public List<EndpointCandidate> inspectAll() {
+        List<EndpointCandidate> endpoints = new ArrayList<>();
+        for (VirtualFile file : FilenameIndex.getAllFilesByExt(project, "java", GlobalSearchScope.projectScope(project))) {
+            ProgressManager.checkCanceled();
+            PsiFile psiFile = PsiManager.getInstance(project).findFile(file);
+            if (!(psiFile instanceof PsiJavaFile javaFile)) continue;
+            for (PsiClass clazz : javaFile.getClasses()) collectEndpoints(clazz, file, endpoints);
+        }
+        return List.copyOf(endpoints);
+    }
+
+    private void collectEndpoints(PsiClass clazz, VirtualFile file, List<EndpointCandidate> endpoints) {
+        ProgressManager.checkCanceled();
+        if (isSupportedClass(clazz)) for (PsiMethod method : clazz.getMethods()) {
+            if (!isMapped(method)) continue;
+            endpoints.add(new EndpointCandidate(inspectMethod(method), file, method.getTextOffset(), inspectValueMappings(method)));
+        }
+        for (PsiClass innerClass : clazz.getInnerClasses()) collectEndpoints(innerClass, file, endpoints);
+    }
+
+    private List<ValueMapping> inspectValueMappings(PsiMethod endpointMethod) {
+        PsiClass endpointClass = endpointMethod.getContainingClass();
+        if (endpointClass == null || !isFeign(endpointClass)) return List.of();
+        int bodyParameter = -1;
+        PsiParameter[] parameters = endpointMethod.getParameterList().getParameters();
+        for (int i = 0; i < parameters.length; i++) {
+            if (hasAnnotation(parameters[i], "RequestBody")) {
+                bodyParameter = i;
+                break;
+            }
+        }
+        if (bodyParameter < 0) return List.of();
+
+        List<ValueMapping> mappings = new ArrayList<>();
+        boolean directParameterPassThrough = false;
+        for (PsiReference reference : ReferencesSearch.search(endpointMethod, GlobalSearchScope.projectScope(project)).findAll()) {
+            ProgressManager.checkCanceled();
+            PsiMethodCallExpression call = PsiTreeUtil.getParentOfType(reference.getElement(), PsiMethodCallExpression.class);
+            if (call == null || call.resolveMethod() != endpointMethod) continue;
+            PsiExpression[] arguments = call.getArgumentList().getExpressions();
+            if (bodyParameter >= arguments.length) continue;
+            PsiElement bodyTarget = resolveReference(arguments[bodyParameter]);
+            PsiMethod caller = PsiTreeUtil.getParentOfType(call, PsiMethod.class);
+            if (!(bodyTarget instanceof PsiVariable) || caller == null) continue;
+            if (bodyTarget instanceof PsiParameter sourceParameter
+                && sourceParameter.getType().getCanonicalText().equals(parameters[bodyParameter].getType().getCanonicalText()))
+                directParameterPassThrough = true;
+            collectSetterMappings(caller, call, bodyTarget, mappings);
+            collectFieldMappings(caller, call, bodyTarget, mappings);
+        }
+        if (mappings.isEmpty() && directParameterPassThrough)
+            return List.of(new ValueMapping("$", "$", "Objeto de entrada transmitido diretamente sem transformação detectada."));
+        if (mappings.isEmpty()) {
+            return List.of(new ValueMapping("$", null,
+                "A origem dos valores não foi inferida por atribuições ou setters diretos antes da chamada Feign."));
+        }
+        return List.copyOf(mappings);
+    }
+
+    private static void collectSetterMappings(PsiMethod caller, PsiMethodCallExpression sendCall, PsiElement bodyTarget,
+                                              List<ValueMapping> mappings) {
+        List<PsiMethodCallExpression> calls = new ArrayList<>(PsiTreeUtil.findChildrenOfType(caller, PsiMethodCallExpression.class));
+        calls.sort((left, right) -> Integer.compare(left.getTextOffset(), right.getTextOffset()));
+        for (PsiMethodCallExpression call : calls) {
+            if (call.getTextOffset() >= sendCall.getTextOffset()) break;
+            if (resolveReference(call.getMethodExpression().getQualifierExpression()) != bodyTarget) continue;
+            String methodName = call.getMethodExpression().getReferenceName();
+            PsiExpression[] arguments = call.getArgumentList().getExpressions();
+            if (methodName == null || !methodName.startsWith("set") || methodName.length() <= 3 || arguments.length != 1) continue;
+            String target = Character.toLowerCase(methodName.charAt(3)) + methodName.substring(4);
+            mappings.add(new ValueMapping(target, sourceProperty(arguments[0]), arguments[0].getText()));
+        }
+    }
+
+    private static void collectFieldMappings(PsiMethod caller, PsiMethodCallExpression sendCall, PsiElement bodyTarget,
+                                             List<ValueMapping> mappings) {
+        for (PsiAssignmentExpression assignment : PsiTreeUtil.findChildrenOfType(caller, PsiAssignmentExpression.class)) {
+            if (assignment.getTextOffset() >= sendCall.getTextOffset()) continue;
+            if (!(assignment.getLExpression() instanceof PsiReferenceExpression target)
+                || !(target.getQualifierExpression() instanceof PsiReferenceExpression qualifier)
+                || qualifier.resolve() != bodyTarget) continue;
+            PsiExpression value = assignment.getRExpression();
+            mappings.add(new ValueMapping(target.getReferenceName(), sourceProperty(value), value == null ? "" : value.getText()));
+        }
+    }
+
+    private static PsiElement resolveReference(PsiExpression expression) {
+        while (expression instanceof com.intellij.psi.PsiParenthesizedExpression parenthesized)
+            expression = parenthesized.getExpression();
+        return expression instanceof PsiReferenceExpression reference ? reference.resolve() : null;
+    }
+
+    private static String sourceProperty(PsiExpression expression) {
+        if (expression == null) return null;
+        while (expression instanceof com.intellij.psi.PsiParenthesizedExpression parenthesized)
+            expression = parenthesized.getExpression();
+        if (expression instanceof PsiMethodCallExpression call) {
+            String methodName = call.getMethodExpression().getReferenceName();
+            if (methodName != null && (methodName.startsWith("get") && methodName.length() > 3
+                || methodName.startsWith("is") && methodName.length() > 2)) {
+                int prefix = methodName.startsWith("get") ? 3 : 2;
+                return Character.toLowerCase(methodName.charAt(prefix)) + methodName.substring(prefix + 1);
+            }
+            PsiExpression[] arguments = call.getArgumentList().getExpressions();
+            if (arguments.length == 1) return sourceProperty(arguments[0]);
+            return null;
+        }
+        if (expression instanceof PsiReferenceExpression reference) return reference.getReferenceName();
+        return null;
+    }
+
+    private static String normalizeName(String name) {
+        return name == null ? "" : name.replaceAll("[^A-Za-z0-9]", "").toLowerCase(Locale.ROOT);
+    }
 
     public Inspection inspect(VirtualFile file, int offset, String forcedMethod) {
         if (file == null) return new Inspection(List.of(), null, null, "Abra um arquivo Java com um controller ou cliente Feign.");

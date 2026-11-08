@@ -44,9 +44,16 @@ public final class ContractComparator {
             compareNodes(actual.items, expected.items, pointer + "[]", out, depth + 1);
         if (actual.kind.equals("object")) {
             for (String requiredName : expected.required) {
-                if (!actual.properties.containsKey(requiredName))
+                if (!actual.properties.containsKey(requiredName)) {
                     out.add(new Finding(Severity.ERROR, pointer + "." + requiredName, "Campo obrigatório exigido pelo receptor não existe no payload declarado."));
-                else if (!actual.required.contains(requiredName))
+                    String misplacedIdField = misplacedIdField(requiredName, actual.properties.keySet());
+                    if (misplacedIdField != null) {
+                        out.add(new Finding(Severity.WARNING, pointer + "." + requiredName,
+                            "Alerta: o contrato exige o sufixo \"Id\" no final (\"" + requiredName
+                                + "\"), mas o payload declara \"" + misplacedIdField
+                                + "\". Isso pode quebrar o contrato."));
+                    }
+                } else if (!actual.required.contains(requiredName))
                     out.add(new Finding(Severity.WARNING, pointer + "." + requiredName, "Campo exigido pelo receptor não está garantido como presente pelo contrato local."));
             }
             for (var entry : actual.properties.entrySet()) {
@@ -59,5 +66,31 @@ public final class ContractComparator {
                 else out.add(new Finding(Severity.WARNING, pointer + "." + entry.getKey(), "Campo extra não declarado no contrato externo (pode ser aceito)."));
             }
         }
+    }
+
+    private static String misplacedIdField(String expectedName, Iterable<String> actualNames) {
+        String expectedLower = expectedName.toLowerCase(java.util.Locale.ROOT);
+        String expectedStem;
+        boolean expectedHasSuffix;
+        if (expectedLower.endsWith("id") && expectedName.length() > 2) {
+            expectedStem = expectedName.substring(0, expectedName.length() - 2);
+            expectedHasSuffix = true;
+        } else if (expectedLower.startsWith("id") && expectedName.length() > 2) {
+            expectedStem = expectedName.substring(2);
+            expectedHasSuffix = false;
+        } else {
+            return null;
+        }
+
+        for (String actualName : actualNames) {
+            String actualLower = actualName.toLowerCase(java.util.Locale.ROOT);
+            boolean misplaced = expectedHasSuffix
+                ? actualLower.startsWith("id") && actualName.length() > 2
+                    && actualName.substring(2).equalsIgnoreCase(expectedStem)
+                : actualLower.endsWith("id") && actualName.length() > 2
+                    && actualName.substring(0, actualName.length() - 2).equalsIgnoreCase(expectedStem);
+            if (misplaced) return actualName;
+        }
+        return null;
     }
 }

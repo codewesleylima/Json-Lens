@@ -4,7 +4,7 @@
 
 [![LinkedIn](https://img.shields.io/badge/linkedin-wesslima-FF6A1A?style=flat-square&labelColor=080A0C&logo=linkedin)](https://linkedin.com/in/wesslima)
 
-Plugin experimental **0.1.0** para visualizar em tempo quase real o request e response de métodos Spring MVC / Spring Cloud OpenFeign e verificar compatibilidade com contratos de outras aplicações.
+Plugin experimental **0.1.0** para visualizar requests e responses declarados no Java e localizar, por similaridade, controllers e clientes Feign relacionados a um cURL ou collection de API.
 
 > O repositório contém o código-fonte, exemplos e testes; não é o pacote instalável. O ZIP do plugin é gerado pelo Gradle em `build/distributions/json-lens-intellij-0.1.0.zip`.
 
@@ -18,11 +18,11 @@ Plugin experimental **0.1.0** para visualizar em tempo quase real o request e re
 - Alterna entre **JSON de exemplo** (valores fictícios) e **esquema** (tipos/campos/requisitos).
 - Observa eventos de modificação PSI de **todo o projeto**: qualquer alteração Java que invalide o PSI agenda nova análise do endpoint selecionado, com *debounce* de 350 ms e processamento em segundo plano, após indexação.
 - Permite fixar um endpoint enquanto você edita outros DTOs.
-- Importa diversos contratos externos `.json`, `.yaml` e `.yml`, mantendo lista local de arquivos recentemente selecionados.
-- Aceita **OpenAPI 3.x**, **JSON Schema** ou um **JSON de exemplo**. Em OpenAPI, informe o método e path da operação externa; por padrão usa a rota atual.
-- Compara recursivamente presença de campos obrigatórios, tipos, enum, propriedades extras e arrays. Exibe erros, avisos e caminho JSON (`$.livro.isbn`).
-- Monitora no disco alterações no arquivo de contrato selecionado a cada 1,6 s e refaz a comparação.
-- **Privacidade:** não chama IA nem envia código para serviços externos. O plugin apenas lê o projeto local e os contratos selecionados.
+- Aceita cURL colado/carregado e collections **Postman v2.1** e **Insomnia JSON**.
+- Varre os endpoints Java indexados e ranqueia separadamente controllers (`@Controller`/`@RestController`) e clientes (`@FeignClient`) por método HTTP, rota e estrutura do body.
+- Cada sugestão mostra pontuação, evidências e caminho do arquivo; **Abrir** navega até a declaração no código.
+- Analisa todas as requests de uma collection sem enviá-las; cURL e collections nunca são executados.
+- **Privacidade:** não chama IA nem envia código para serviços externos. O plugin apenas lê o projeto e os arquivos cURL/collection selecionados localmente.
 
 ## Como compilar
 
@@ -45,15 +45,12 @@ O projeto inclui um Gradle Wrapper (`gradlew`, `gradlew.bat` e `gradle/wrapper/g
 
 Em Linux/macOS, use `./gradlew` no lugar de `.\gradlew.bat`. A primeira execução precisa de Internet para baixar o Gradle, a IDE de desenvolvimento e as dependências. O workflow `.github/workflows/build.yml` executa a validação, faz o build e publica o ZIP como artefato do GitHub Actions.
 
-## Roteiro do exemplo da Biblioteca
+## Localizar uma integração
 
-1. Crie um projeto Java Spring com Spring MVC e OpenFeign. Copie o conteúdo de `examples/BibliotecaClient.java` ajustando o package/imports conforme sua aplicação.
-2. Abra `BibliotecaClient.java` e coloque o cursor em `criar(...)`.
-3. Abra a janela **JSON Lens**. Na aba **Request**, confirme que o campo aparece como `codigoIsbn` (por causa de `@JsonProperty`).
-4. Vá até **Comparação** e importe `examples/biblioteca-openapi.yaml`. Use **Request**, `POST` e `/v1/acervo/livros`.
-5. O comparador deve identificar que `isbn` está ausente e que `codigoIsbn` é extra/proibido pelo schema. Corrija `@JsonProperty("codigoIsbn")` para `@JsonProperty("isbn")`.
-6. A análise deve refazer a comparação quando o documento Java for aplicado/confirmado pelo PSI. Se não atualizar imediatamente, tire e volte o cursor ao método ou use a seleção de método.
-7. Para testar outro contrato, importe o arquivo adicional e selecione-o na lista de contratos.
+1. Abra um projeto Java Spring com fontes indexadas e a janela **JSON Lens**.
+2. Na aba **Localizar interação**, cole um cURL ou carregue um export Postman/Insomnia.
+3. Clique em **Localizar no código**. Os resultados mostram os controllers que recebem e os clientes Feign que enviam requests parecidos.
+4. Confira evidências e pontuação; use **Abrir** para navegar até o método sugerido.
 
 ## Diferença entre controller e cliente de integração
 
@@ -64,14 +61,15 @@ Em Linux/macOS, use `./gradlew` no lugar de `.\gradlew.bat`. A primeira execuç�
 ## Precisão e limites conhecidos
 
 - **Tempo real:** usa alterações estruturais e de conteúdo expostas pelo PSI, com *debounce* de ~350 ms e reanálise em background. O resultado depende do commit do documento e do índice Java disponível. Não há garantia de atualização em cada tecla enquanto o código está sintaticamente incompleto.
-- **Contrato externo:** o parser lê arquivos salvos; edição não salva no editor de texto será detectada quando gravar em disco.
+- A busca é uma **heurística local** baseada em método, rota e body declarado; a pontuação não prova o fluxo de execução nem associa automaticamente controller → service → mapper → Feign.
+- O body da collection/cURL é um exemplo concreto, não um schema formal; campos ausentes não significam necessariamente incompatibilidade.
 - Exemplos de campo não refletem dados reais. Não executa código, chama APIs ou lê valores do banco.
 - Suporte a `@JsonView`, `@JsonUnwrapped`, getters computados, `@JsonTypeInfo`, `@JsonValue`, `@JsonCreator`, custom `ObjectMapper`, validações condicionais e generics complexos é parcial ou ausente; a interface exibe avisos para alguns desses casos.
 - Enums com serialização especial precisam ser verificados manualmente.
-- Um **JSON de exemplo** não especifica formalmente obrigatoriedade, limites ou enum. Os campos presentes são assumidos como esperados; prefira OpenAPI/JSON Schema para decisões de integração.
-- OpenAPI suporta apenas `$ref` interno (`#/...`), e trata `oneOf`/`anyOf` de maneira parcial (sinalizado). A análise escolhe uma resposta HTTP comum 200/201/202/204/default, sem cobrir todos os status e esquemas possíveis.
+- Um body de exemplo não especifica formalmente campos obrigatórios, limites ou enums; a busca usa sua estrutura apenas como sinal de similaridade.
+- A busca de collection aceita Postman v2.1 e Insomnia JSON; formatos/versões não reconhecidos precisam ser exportados novamente ou fornecidos como cURL.
 - Não analisa automaticamente clientes REST/HTTP que não sejam Feign (RestTemplate, WebClient, Java HttpClient), nem contratos Protobuf/Avro/GraphQL, nem controllers Kotlin.
-- Comparação estrutural ≠ conformidade integral em runtime. Campos dinâmicos, headers, autenticação, integração, valores, `@Pattern`, ranges, `maxLength` e outros constraints precisam de validação adicional.
+- Similaridade estática ≠ conformidade integral em runtime. Campos dinâmicos, headers, autenticação, transformação de payloads, valores e constraints precisam de validação adicional.
 - Para `Page<T>` a visualização é aproximada como array de conteúdo; a estrutura JSON real do `Page` é mais complexa.
 - **Não há upload do código**; a importação de arquivos do computador só fornece dados ao plugin local.
 

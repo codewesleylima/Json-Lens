@@ -16,6 +16,16 @@ final class ContractComparatorTest {
             f.pointer().equals("$.isbn") && f.severity() == ContractComparator.Severity.ERROR));
     }
 
+    @Test void suggestsMovingIdSuffixToMatchRequiredFieldName() {
+        SchemaNode local = SchemaNode.of("object").field("idNome", SchemaNode.of("string"), true);
+        SchemaNode external = SchemaNode.of("object").field("nomeId", SchemaNode.of("string"), true);
+
+        List<ContractComparator.Finding> findings = comparator.compare(local, external);
+
+        assertTrue(findings.stream().anyMatch(f -> f.severity() == ContractComparator.Severity.WARNING
+            && f.message().contains("sufixo \"Id\"") && f.message().contains("\"idNome\"")));
+    }
+
     @Test void detectsIncompatibleTypeAndRestrictedAdditionalProperty() {
         SchemaNode local = SchemaNode.of("object").field("ano", SchemaNode.of("string"), true)
             .field("campoExtra", SchemaNode.of("boolean"), true);

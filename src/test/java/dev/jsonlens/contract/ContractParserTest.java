@@ -55,6 +55,27 @@ final class ContractParserTest {
         assertEquals("boolean", parsed.node().properties.get("ativo").kind);
     }
 
+    @Test void infersRequestContractFromCurlJsonBodyInMemory() {
+        var parsed = parser.parseJsonExample("{\"cliente\":{\"nome\":\"Ana\"},\"ativo\":true}");
+
+        assertEquals("Body JSON do cURL", parsed.sourceType());
+        assertTrue(parsed.node().required.contains("cliente"));
+        assertEquals("string", parsed.node().properties.get("cliente").properties.get("nome").kind);
+        assertTrue(parsed.warnings().getFirst().contains("exemplo"));
+        assertThrows(IllegalArgumentException.class, () -> parser.parseJsonExample("{invalid"));
+        assertThrows(IllegalArgumentException.class, () -> parser.parseJsonExample("[]"));
+    }
+
+    @Test void parsesPastedJsonContractWithoutCreatingATemporaryFile() throws Exception {
+        var parsed = parser.parseText("""
+            {"type":"object","required":["nomeCompleto"],"properties":{"nomeCompleto":{"type":"string"}}}
+            """, "contract.json", "POST", "/clientes", false);
+
+        assertEquals("JSON Schema", parsed.sourceType());
+        assertTrue(parsed.node().required.contains("nomeCompleto"));
+        assertEquals("string", parsed.node().properties.get("nomeCompleto").kind);
+    }
+
     @Test void resolvesNestedCollectionsMapsEnumsAndCircularReferences() throws Exception {
         Path source = temp.resolve("nested-schema.json");
         Files.writeString(source, """
@@ -114,5 +135,20 @@ final class ContractParserTest {
 
         assertEquals("string", parsed.node().properties.get("id").kind);
         assertTrue(parsed.node().required.contains("id"));
+    }
+
+    @Test void readsFiapLambdaCustomerAuthenticationRequestAndResponse() throws Exception {
+        Path source = Path.of("examples", "fiap-lambda-auth-customer-openapi.json");
+
+        var request = parser.parse(source, "POST", "/auth/customer", false);
+        assertEquals("OpenAPI", request.sourceType());
+        assertTrue(request.node().required.contains("cpf"));
+        assertEquals("string", request.node().properties.get("cpf").kind);
+
+        var response = parser.parse(source, "POST", "/auth/customer", true);
+        assertEquals("OpenAPI", response.sourceType());
+        assertTrue(response.node().required.containsAll(List.of("accessToken", "expiresAt", "tokenType")));
+        assertEquals("integer", response.node().properties.get("expiresAt").kind);
+        assertEquals(List.of("Bearer"), response.node().properties.get("tokenType").enumValues);
     }
 }

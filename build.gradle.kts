@@ -42,7 +42,7 @@ intellijPlatform {
         id = "dev.jsonlens.livecontracts"
         name = "JSON Lens - Live API Contracts"
         version = project.version.toString()
-        description = "Live request/response previews and offline partner contract comparison for Java REST controllers and Feign clients."
+        description = "Live JSON previews and offline request-to-endpoint matching for Java controllers and Feign clients."
         vendor { name = "JSON Lens" }
         ideaVersion {
             sinceBuild = "253"

@@ -1,0 +1,124 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "FIAP Lambda - Customer Authentication",
+    "version": "1.0.0",
+    "description": "Contrato de exemplo para autenticar Customer por CPF."
+  },
+  "paths": {
+    "/auth/customer": {
+      "post": {
+        "operationId": "authenticateCustomer",
+        "summary": "Autentica um Customer por CPF",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerAuthenticationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Customer autenticado; retorna um token Bearer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessTokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Body ausente/malformado ou CPF inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Customer não encontrado; a resposta não revela a existência do cadastro.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Customer não está ativo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CustomerAuthenticationRequest": {
+        "type": "object",
+        "required": [
+          "cpf"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "cpf": {
+            "type": "string",
+            "description": "CPF de teste com dígitos verificadores válidos, com ou sem pontuação.",
+            "pattern": "^(?:[0-9]{11}|[0-9]{3}\\.[0-9]{3}\\.[0-9]{3}-[0-9]{2})$"
+          }
+        }
+      },
+      "AccessTokenResponse": {
+        "type": "object",
+        "required": [
+          "accessToken",
+          "expiresAt",
+          "tokenType"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "JWT assinado com RS256."
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Expiração em milissegundos desde Unix epoch."
+          },
+          "tokenType": {
+            "type": "string",
+            "enum": [
+              "Bearer"
+            ]
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

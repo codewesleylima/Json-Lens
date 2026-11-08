@@ -24,11 +24,33 @@ public final class ContractParser {
     public record Parsed(SchemaNode node, String sourceType, List<String> warnings) {}
     private final Gson gson = new Gson();
 
+    public Parsed parseJsonExample(String raw) {
+        if (raw == null || raw.isBlank()) throw new IllegalArgumentException("O cURL não contém um body JSON.");
+        if (raw.length() > 2_000_000) throw new IllegalArgumentException("Body JSON do cURL acima de 2 MB.");
+
+        final JsonElement document;
+        try {
+            document = JsonParser.parseString(raw);
+        } catch (RuntimeException ex) {
+            throw new IllegalArgumentException("O body do cURL não é um JSON válido.", ex);
+        }
+        if (!document.isJsonObject()) throw new IllegalArgumentException("O body do cURL deve ser um objeto JSON.");
+
+        return new Parsed(inferFromExample(document, 0), "Body JSON do cURL",
+            List.of("Body tratado como exemplo; campos presentes são considerados esperados, mas obrigatoriedade formal não pode ser inferida."));
+    }
+
     public Parsed parse(Path path, String httpMethod, String endpointPath, boolean response) throws Exception {
         if (Files.size(path) > 2_000_000) throw new IllegalArgumentException("Contrato acima de 2 MB; use um arquivo menor.");
         String raw = Files.readString(path, StandardCharsets.UTF_8);
+        return parseText(raw, path.toString(), httpMethod, endpointPath, response);
+    }
+
+    public Parsed parseText(String raw, String sourceName, String httpMethod, String endpointPath, boolean response) throws Exception {
+        if (raw == null || raw.isBlank()) throw new IllegalArgumentException("Cole um contrato JSON ou YAML.");
+        if (raw.length() > 2_000_000) throw new IllegalArgumentException("Contrato acima de 2 MB; use um arquivo menor.");
         JsonElement document;
-        if (path.toString().toLowerCase(Locale.ROOT).matches(".*\\.(yaml|yml)$")) {
+        if (sourceName.toLowerCase(Locale.ROOT).matches(".*\\.(yaml|yml)$")) {
             LoaderOptions options = new LoaderOptions();
             options.setMaxAliasesForCollections(30);
             options.setCodePointLimit(2_000_000);
