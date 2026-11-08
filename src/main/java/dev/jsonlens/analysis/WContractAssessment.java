@@ -67,8 +67,10 @@ public final class WContractAssessment {
                         boolean error = finding.severity() == ContractComparator.Severity.ERROR;
                         if (error) { endpointErrors++; summary.errors++; valid = false; }
                         else { endpointWarnings++; summary.warnings++; }
+                        boolean temporal = finding.message().startsWith("Risco temporal:")
+                            || finding.message().contains("date-time");
                         risks.add(new Risk(error ? "HIGH" : "MEDIUM", error ? "CONFIRMED" : "LIMITED",
-                            "SCHEMA_" + finding.severity(), endpoint.snapshot().title,
+                            temporal ? "TIME_FORMAT" : "SCHEMA_" + finding.severity(), endpoint.snapshot().title,
                             binding.source, finding.pointer(), finding.message(),
                             "Comparação estática " + (binding.response ? "Response" : "Request") +
                                 " com contrato externo '" + binding.source + "'.",
