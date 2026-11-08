@@ -8,6 +8,7 @@ import dev.jsonlens.analysis.InteractionMatcher;
 import dev.jsonlens.analysis.JavaEndpointInspector;
 import dev.jsonlens.contract.HttpRequestSample;
 import java.util.List;
+import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 
 /** Browser DTOs: match score is not contract adherence, and no HTTP request is ever sent. */
@@ -16,6 +17,21 @@ final class LensWebSearch {
     record Result(List<JavaEndpointInspector.EndpointCandidate> endpoints,
                   List<HttpRequestSample> requests,
                   List<List<InteractionMatcher.Match>> matches) {}
+
+    static final class EndpointCache {
+        private volatile Entry entry;
+
+        List<JavaEndpointInspector.EndpointCandidate> get(long revision,
+                Supplier<List<JavaEndpointInspector.EndpointCandidate>> inspect) {
+            Entry cached = entry;
+            if (cached != null && cached.revision() == revision) return cached.endpoints();
+            List<JavaEndpointInspector.EndpointCandidate> endpoints = List.copyOf(inspect.get());
+            entry = new Entry(revision, endpoints);
+            return endpoints;
+        }
+
+        private record Entry(long revision, List<JavaEndpointInspector.EndpointCandidate> endpoints) {}
+    }
 
     private LensWebSearch() {}
 
@@ -56,6 +72,8 @@ final class LensWebSearch {
         var snapshot = endpoint.snapshot();
         JsonObject item = new JsonObject();
         item.addProperty("id", id);
+        item.addProperty("key", (endpoint.file() == null ? "" : endpoint.file().getUrl()) + "\n"
+            + snapshot.title + "\n" + snapshot.verb + "\n" + snapshot.path + "\n" + snapshot.direction);
         item.addProperty("title", snapshot.title);
         item.addProperty("method", snapshot.verb);
         item.addProperty("path", snapshot.path);

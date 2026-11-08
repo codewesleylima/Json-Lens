@@ -28,6 +28,7 @@ import com.intellij.util.ui.JBUI;
 import dev.jsonlens.analysis.JavaEndpointInspector;
 import dev.jsonlens.model.EndpointSnapshot;
 import java.awt.BorderLayout;
+import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
@@ -35,6 +36,7 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.GridLayout;
 import java.awt.GraphicsEnvironment;
 import java.awt.Insets;
 import java.awt.datatransfer.StringSelection;
@@ -43,6 +45,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.swing.BorderFactory;
+import javax.swing.ButtonGroup;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -54,6 +57,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
+import javax.swing.JToggleButton;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.UIManager;
 import javax.swing.SwingUtilities;
@@ -86,7 +90,13 @@ public final class LensPanel implements Disposable {
     private final InteractionSearchPanel interactionSearchPanel;
     private final ContractWorkbenchPanel contractWorkbenchPanel;
     private JBTabbedPane previewTabs;
-    private JBTabbedPane tabs;
+    private final CardLayout pageLayout = new CardLayout();
+    private final JPanel pages = new JPanel(pageLayout);
+    private final ButtonGroup navigationGroup = new ButtonGroup();
+    private final JToggleButton previewPageButton = new JToggleButton();
+    private final JToggleButton searchPageButton = new JToggleButton();
+    private final JToggleButton contractsPageButton = new JToggleButton();
+    private final JToggleButton detailsPageButton = new JToggleButton();
     private final AtomicLong generation = new AtomicLong();
     private VirtualFile pinnedFile;
     private int pinnedOffset;
@@ -109,8 +119,8 @@ public final class LensPanel implements Disposable {
         status.setText(LensPreferences.text("Aguardando análise...", "Waiting for analysis..."));
         root.setOpaque(true);
         root.setBackground(BACKGROUND);
-        root.setBorder(JBUI.Borders.empty(12));
-        root.setPreferredSize(new Dimension(JBUI.scale(410), JBUI.scale(660)));
+        root.setBorder(JBUI.Borders.empty(8));
+        root.setPreferredSize(new Dimension(JBUI.scale(460), JBUI.scale(700)));
         title.setFont(title.getFont().deriveFont(Font.BOLD, 17f));
         title.putClientProperty("jsonlens.fontRole", "heading");
         title.setForeground(TEXT);
@@ -188,20 +198,16 @@ public final class LensPanel implements Disposable {
         pinButton.setFocusPainted(false);
         schemaView.setOpaque(false);
         schemaView.setForeground(TEXT);
-        JPanel top = new JPanel();
-        top.setOpaque(false);
-        top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
-        top.add(heading);
-        top.add(javax.swing.Box.createVerticalStrut(8));
-        top.add(status);
-        top.add(javax.swing.Box.createVerticalStrut(8));
-        top.add(endpointCard);
-        top.add(javax.swing.Box.createVerticalStrut(4));
         methodLabel.setText(LensPreferences.text("Método", "Method"));
         methodLabel.setForeground(new Color(0xB6C7D8));
-        top.add(row(methodLabel, methods, pinButton));
-        top.add(row(schemaView,
-            copyRequestButton, copyResponseButton));
+        JPanel methodControls = new JPanel(new BorderLayout(8, 0));
+        methodControls.setOpaque(false);
+        methodControls.add(methods, BorderLayout.CENTER);
+        methodControls.add(pinButton, BorderLayout.EAST);
+        endpointCard.add(javax.swing.Box.createVerticalStrut(8));
+        endpointCard.add(methodLabel);
+        endpointCard.add(javax.swing.Box.createVerticalStrut(4));
+        endpointCard.add(methodControls);
         copyRequestButton.setText(LensPreferences.text("Copiar request", "Copy request"));
         copyResponseButton.setText(LensPreferences.text("Copiar response", "Copy response"));
         styleButton(copyRequestButton);
@@ -209,28 +215,57 @@ public final class LensPanel implements Disposable {
         copyRequestButton.addActionListener(e -> copy(currentRequest));
         copyResponseButton.addActionListener(e -> copy(currentResponse));
         schemaView.setText(LensPreferences.text("Mostrar schema", "Show schema"));
-        root.add(top, BorderLayout.NORTH);
+        JPanel previewActions = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(6), JBUI.scale(2)));
+        previewActions.setOpaque(false);
+        previewActions.add(schemaView);
+        previewActions.add(copyRequestButton);
+        previewActions.add(copyResponseButton);
 
-        tabs = new JBTabbedPane();
-        tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         previewTabs = new JBTabbedPane();
-        previewTabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
+        previewTabs.setTabLayoutPolicy(JTabbedPane.WRAP_TAB_LAYOUT);
         setEditorText(requestEditor, LensPreferences.text("Abra um controller Spring MVC...", "Open a Spring MVC controller..."));
         setEditorText(responseEditor, LensPreferences.text(
             "Selecione um método para visualizar o response...", "Select a method to preview its response..."));
         previewTabs.addTab("Request", requestEditor.getComponent());
         previewTabs.addTab("Response", responseEditor.getComponent());
-        tabs.addTab(LensPreferences.text("Preview", "Preview"), previewTabs);
-        tabs.addTab(LensPreferences.text("Localizar interação", "Find interaction"), interactionSearchPanel.component());
-        tabs.addTab(LensPreferences.text("Contratos", "Contracts"), contractWorkbenchPanel.component());
+
+        JPanel preview = new JPanel(new BorderLayout(0, JBUI.scale(7)));
+        preview.setOpaque(false);
+        JPanel previewHeader = new JPanel(new BorderLayout(0, JBUI.scale(7)));
+        previewHeader.setOpaque(false);
+        previewHeader.add(status, BorderLayout.NORTH);
+        previewHeader.add(endpointCard, BorderLayout.CENTER);
+        previewHeader.add(previewActions, BorderLayout.SOUTH);
+        preview.add(previewHeader, BorderLayout.NORTH);
+        preview.add(previewTabs, BorderLayout.CENTER);
+        pages.add(preview, "preview");
+        pages.add(interactionSearchPanel.component(), "search");
+        pages.add(contractWorkbenchPanel.component(), "contracts");
         notesView.setRows(5);
         notesView.setText(LensPreferences.text("Avisos e parâmetros de rota/query aparecerão aqui.",
             "Warnings and route/query parameters will appear here."));
-        tabs.addTab(LensPreferences.text("Detalhes", "Details"), codeScrollPane(notesView));
-        tabs.setBorder(JBUI.Borders.emptyTop(4));
-        tabs.setBackground(BACKGROUND);
-        tabs.setForeground(TEXT);
-        root.add(tabs, BorderLayout.CENTER);
+        pages.add(codeScrollPane(notesView), "details");
+
+        JPanel navigation = new JPanel(new GridLayout(1, 4, JBUI.scale(4), 0));
+        navigation.setOpaque(false);
+        addNavigationButton(navigation, previewPageButton, "preview");
+        addNavigationButton(navigation, searchPageButton, "search");
+        addNavigationButton(navigation, contractsPageButton, "contracts");
+        addNavigationButton(navigation, detailsPageButton, "details");
+        previewPageButton.setText(LensPreferences.text("Preview", "Preview"));
+        searchPageButton.setText(LensPreferences.text("Localizar", "Find"));
+        contractsPageButton.setText(LensPreferences.text("Contratos", "Contracts"));
+        detailsPageButton.setText(LensPreferences.text("Detalhes", "Details"));
+        JPanel content = new JPanel(new BorderLayout(0, JBUI.scale(7)));
+        content.setOpaque(false);
+        content.setBorder(JBUI.Borders.emptyTop(8));
+        content.add(navigation, BorderLayout.NORTH);
+        content.add(pages, BorderLayout.CENTER);
+        root.add(heading, BorderLayout.NORTH);
+        root.add(content, BorderLayout.CENTER);
+        previewPageButton.setSelected(true);
+        pageLayout.show(pages, "preview");
+        updateNavigationStyles();
 
         refreshTimer = new Timer(350, e -> refresh());
         refreshTimer.setRepeats(false);
@@ -313,12 +348,11 @@ public final class LensPanel implements Disposable {
         copyResponseButton.setText(LensPreferences.text("Copiar response", "Copy response"));
         settingsButton.setText(LensPreferences.text("⚙ Config", "⚙ Settings"));
         settingsButton.setToolTipText(LensPreferences.text("Configurações de aparência e idioma", "Appearance and language settings"));
-        if (tabs != null) {
-            tabs.setTitleAt(0, LensPreferences.text("Preview", "Preview"));
-            tabs.setTitleAt(1, LensPreferences.text("Localizar interação", "Find interaction"));
-            tabs.setTitleAt(2, LensPreferences.text("Contratos", "Contracts"));
-            tabs.setTitleAt(3, LensPreferences.text("Detalhes", "Details"));
-        }
+        previewPageButton.setText(LensPreferences.text("Preview", "Preview"));
+        searchPageButton.setText(LensPreferences.text("Localizar", "Find"));
+        contractsPageButton.setText(LensPreferences.text("Contratos", "Contracts"));
+        detailsPageButton.setText(LensPreferences.text("Detalhes", "Details"));
+        updateNavigationStyles();
         contractWorkbenchPanel.applyLanguage();
         interactionSearchPanel.applyLanguage();
         if (lastSnapshot == null) {
@@ -330,12 +364,40 @@ public final class LensPanel implements Disposable {
 
     private void applyPreferences(LensTheme previousTheme) {
         LensAppearance.apply(root, previousTheme, LensTheme.current());
+        updateNavigationStyles();
         refreshJsonEditor(requestEditor);
         refreshJsonEditor(responseEditor);
         interactionSearchPanel.applyPreferences();
         contractWorkbenchPanel.applyPreferences();
         root.revalidate();
         root.repaint();
+    }
+
+    private void addNavigationButton(JPanel navigation, JToggleButton button, String page) {
+        button.setFocusPainted(false);
+        button.setFont(button.getFont().deriveFont(Font.BOLD, 10f));
+        button.setMargin(JBUI.insets(7, 2));
+        navigationGroup.add(button);
+        navigation.add(button);
+        button.addActionListener(e -> {
+            pageLayout.show(pages, page);
+            updateNavigationStyles();
+        });
+    }
+
+    private void updateNavigationStyles() {
+        LensTheme theme = LensTheme.current();
+        for (JToggleButton button : List.of(previewPageButton, searchPageButton,
+            contractsPageButton, detailsPageButton)) {
+            boolean selected = button.isSelected();
+            button.setOpaque(true);
+            button.setBackground(selected ? theme.card() : theme.surface());
+            button.setForeground(selected ? theme.accent() : theme.secondaryText());
+            Color underline = selected ? theme.accent() : theme.border();
+            button.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, JBUI.scale(selected ? 2 : 1), 0, underline),
+                JBUI.Borders.empty(7, 2)));
+        }
     }
 
     private static void refreshJsonEditor(Editor editor) {
@@ -585,9 +647,6 @@ public final class LensPanel implements Disposable {
     private static Color uiColor(String key, Color fallback) {
         Color color = UIManager.getColor(key);
         return color == null ? fallback : color;
-    }
-    private static JPanel row(Component... components) {
-        return LensUi.adaptiveRow(JBUI.scale(590), components);
     }
     private static void styleButton(JButton button) {
         LensTheme theme = LensTheme.current();

@@ -13,9 +13,13 @@
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   const model = {
     endpoint: null, methods: [], selected: '', pinned: false, payload: 'request', compareCandidateId: -1,
+    compareTarget: null,
     source: 'curl', collectionRaw: '', searches: {curl: null, collection: null},
     actualJson: '', contractMode: 'request', compareTimer: null
   };
+  let renderGeneration = 0;
+  let renderedSource = null;
+  let renderedSearch = null;
 
   const style = document.createElement('style');
   style.textContent = `
@@ -125,7 +129,7 @@
   }
 
   // The prototype's public handlers are intentionally replaced, not layered on top.
-  chooseEndpoint = key => { model.compareCandidateId = -1; bridge('select', {key}); };
+  chooseEndpoint = key => { model.compareCandidateId = -1; model.compareTarget = null; bridge('select', {key}); };
   choosePayload = kind => { model.payload = kind; renderPreview(); };
   togglePin = () => bridge('pin');
   copyPayload = () => bridge('copy', {text: model.actualJson});
@@ -133,10 +137,14 @@
   toggleDto = () => toast('Edite o DTO diretamente no editor Java do IntelliJ.');
   toggleJavaEditor = () => toast('Use o editor Java real; esta janela apenas inspeciona o projeto.');
 
+  renderSearchCache = () => {};
   const oldNavigate = navigate;
   navigate = function (view) {
     if (view === 'coverage') return;
-    if (view === 'compare' && document.querySelector('#view-preview:not([hidden])')) model.compareCandidateId = -1;
+    if (view === 'compare' && document.querySelector('#view-preview:not([hidden])')) {
+      model.compareCandidateId = -1;
+      model.compareTarget = null;
+    }
     oldNavigate(view);
     if (view === 'search') renderResults();
     if (view === 'compare') scheduleNativeCompare();
@@ -149,7 +157,7 @@
     el('sourceCurl').hidden = source !== 'curl';
     el('sourceCollection').hidden = source !== 'collection';
     renderResults();
-    bridge('source', {source});
+    if (!model.searches[source]) bridge('source', {source});
   }
   chooseSource = sourceChanged;
 
@@ -194,6 +202,13 @@
 
   function renderCollectionFile(name) {
     el('collectionName').textContent = name;
+    if (model.collectionRaw.length > 250000) {
+      el('collectionPreview').innerHTML = jsonHighlight(model.collectionRaw.slice(0, 20000));
+      el('collectionCount').textContent = '—';
+      el('collectionInfo').textContent =
+        'Prévia limitada para manter a interface responsiva; o arquivo completo será analisado.';
+      return;
+    }
     try {
       const doc = JSON.parse(model.collectionRaw);
       const json = JSON.stringify(doc, null, 2);
@@ -213,9 +228,6 @@
     const percentage = match.adherence < 0 ? '—' : match.adherence + '%';
     const evidences = (match.evidence || []).map(line =>
       '<div><span>✓</span> ' + escape(line) + '</div>').join('');
-    const findings = (match.findings || []).filter(x => x.severity !== 'INFO').map(
-      x => '<div class="finding"><span class="level">' + escape(x.severity) +
-        '</span><span>' + escape(x.pointer) + ' — ' + escape(x.message) + '</span></div>').join('');
     card.innerHTML =
       '<div class="lab-coverage-top"><div><div class="match-name">' + escape(match.title) +
       '</div><div class="match-route">' + escape(match.method + ' ' + match.path) + '</div></div>' +
@@ -226,22 +238,29 @@
       Math.max(0, Math.min(100, Number(match.score) || 0)) + '%"></span></div>' +
       '<div class="match-evidence">' + evidences + '<small>' +
       escape(match.direction || '') + ' · ' + escape(match.file || '') + '</small></div>' +
-      '<div class="match-details" hidden><div class="lab-grid">' +
-      '<div class="lab-mini-card"><strong>Request inferido</strong><pre class="lab-json-preview">' +
-      escape(JSON.stringify(match.request, null, 2)) + '</pre></div>' +
-      '<div class="lab-mini-card"><strong>Response inferido</strong><pre class="lab-json-preview">' +
-      escape(JSON.stringify(match.response, null, 2)) + '</pre></div></div>' +
-      (findings || '<p>Nenhuma divergência estrutural apontada por esta comparação estática.</p>') +
-      '</div><div class="match-footer"><button class="card-btn" data-action="expand">Expandir</button>' +
+      '<div class="match-details" hidden></div>' +
+      '<div class="match-footer"><button class="card-btn" data-action="expand">Expandir</button>' +
       '<button class="card-btn highlight" data-action="contract">Comparar contrato</button>' +
       '<button class="card-btn" data-action="open">Abrir código ↗</button></div>';
     card.querySelector('[data-action="expand"]').addEventListener('click', event => {
       const details = card.querySelector('.match-details');
       details.hidden = !details.hidden;
+      if (!details.hidden && !details.hasChildNodes()) {
+        const findings = (match.findings || []).filter(x => x.severity !== 'INFO').map(
+          x => '<div class="finding"><span class="level">' + escape(x.severity) +
+            '</span><span>' + escape(x.pointer) + ' — ' + escape(x.message) + '</span></div>').join('');
+        details.innerHTML = '<div class="lab-grid">' +
+          '<div class="lab-mini-card"><strong>Request inferido</strong><pre class="lab-json-preview">' +
+          escape(JSON.stringify(match.request, null, 2)) + '</pre></div>' +
+          '<div class="lab-mini-card"><strong>Response inferido</strong><pre class="lab-json-preview">' +
+          escape(JSON.stringify(match.response, null, 2)) + '</pre></div></div>' +
+          (findings || '<p>Nenhuma divergência estrutural apontada por esta comparação estática.</p>');
+      }
       event.currentTarget.textContent = details.hidden ? 'Expandir' : 'Recolher';
     });
     card.querySelector('[data-action="contract"]').addEventListener('click', () => {
       model.compareCandidateId = Number(match.id);
+      model.compareTarget = {source: model.source, key: match.key};
       el('compareActualLabel').textContent = match.title || '';
       el('actualFields').textContent = Object.keys(match.request || {}).join(' · ') || '—';
       navigate('compare');
@@ -253,6 +272,10 @@
 
   function renderResults() {
     const holder = el('resultsHolder'), cached = model.searches[model.source];
+    if (renderedSource === model.source && renderedSearch === cached) return;
+    renderedSource = model.source;
+    renderedSearch = cached;
+    const generation = ++renderGeneration;
     holder.replaceChildren();
     if (!cached) {
       el('resultCount').textContent = 'Sem busca';
@@ -263,28 +286,38 @@
     el('resultCount').textContent = requests.length + ' request(s)';
     el('scanSummary').textContent = cached.scanned + ' endpoint(s) indexados. Match e aderência são medidas distintas.';
     el('sourceCacheStatus').textContent = 'Busca ' + model.source + ' preservada nesta sessão.';
-    for (const request of requests) {
-      const header = document.createElement('div');
-      header.className = 'match-category';
-      header.textContent = (request.method || '') + ' ' + (request.path || '') + ' · ' + (request.name || '');
-      holder.appendChild(header);
-      for (const [title, matches] of [
-        ['↘ RECEBEM / CONTROLLERS', request.inbound || []],
-        ['↗ ENVIAM / FEIGN CLIENTS', request.outbound || []]
-      ]) {
-        const category = document.createElement('div');
-        category.className = 'match-category';
-        category.textContent = title;
-        holder.appendChild(category);
-        if (matches.length) matches.forEach(match => holder.appendChild(matchCard(match)));
-        else {
-          const empty = document.createElement('p');
-          empty.className = 'hint';
-          empty.textContent = 'Nenhum endpoint deste tipo encontrado.';
-          holder.appendChild(empty);
+    let index = 0;
+    function renderBatch() {
+      if (generation !== renderGeneration) return;
+      const fragment = document.createDocumentFragment();
+      const end = Math.min(index + 5, requests.length);
+      for (; index < end; index++) {
+        const request = requests[index];
+        const header = document.createElement('div');
+        header.className = 'match-category';
+        header.textContent = (request.method || '') + ' ' + (request.path || '') + ' · ' + (request.name || '');
+        fragment.appendChild(header);
+        for (const [title, matches] of [
+          ['↘ RECEBEM / CONTROLLERS', request.inbound || []],
+          ['↗ ENVIAM / FEIGN CLIENTS', request.outbound || []]
+        ]) {
+          const category = document.createElement('div');
+          category.className = 'match-category';
+          category.textContent = title;
+          fragment.appendChild(category);
+          if (matches.length) matches.forEach(match => fragment.appendChild(matchCard(match)));
+          else {
+            const empty = document.createElement('p');
+            empty.className = 'hint';
+            empty.textContent = 'Nenhum endpoint deste tipo encontrado.';
+            fragment.appendChild(empty);
+          }
         }
       }
+      holder.appendChild(fragment);
+      if (index < requests.length) requestAnimationFrame(renderBatch);
     }
+    renderBatch();
   }
 
   selectCompareMode = function (mode) {
@@ -297,11 +330,11 @@
   compareContracts = function () {
     bridge('compare', {raw: el('contractInput').value, mode: model.contractMode, candidateId: model.compareCandidateId});
   };
-  scheduleNativeCompare = function () {
+  function scheduleNativeCompare() {
     clearTimeout(model.compareTimer);
     el('liveCompareStatus').textContent = '◌ Comparando contrato no Java…';
     model.compareTimer = setTimeout(() => compareContracts(), 350);
-  };
+  }
   scheduleLiveCompare = scheduleNativeCompare;
   function renderComparison(data) {
     const box = el('contractFindings');
@@ -392,6 +425,14 @@
           break;
         case 'search':
           model.searches[data.source] = data;
+          if (model.compareTarget?.source === data.source) {
+            const matches = (data.requests || []).flatMap(request =>
+              [...(request.inbound || []), ...(request.outbound || [])]);
+            const updated = matches.find(match => match.key === model.compareTarget.key);
+            model.compareCandidateId = updated ? Number(updated.id) : -2;
+            if (updated && el('contractInput')?.value.trim()) scheduleNativeCompare();
+            if (!updated) toast('O endpoint não está mais nos resultados; selecione-o novamente.');
+          }
           if (model.source === data.source) renderResults();
           break;
         case 'scan-error':

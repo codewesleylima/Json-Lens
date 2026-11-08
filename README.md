@@ -20,8 +20,10 @@ Plugin experimental **0.1.0** para visualizar requests e responses declarados no
 - Permite fixar um endpoint enquanto você edita outros DTOs.
 - Aceita cURL colado/carregado e collections **Postman v2.1** e **Insomnia JSON**.
 - Varre os endpoints Java indexados e ranqueia separadamente controllers (`@Controller`/`@RestController`) e clientes (`@FeignClient`) por método HTTP, rota e estrutura do body.
-- Cada sugestão mostra pontuação, evidências e caminho do arquivo; **Abrir** navega até a declaração no código.
+- Cada sugestão mostra pontuação, evidências e nome do arquivo; **Abrir código** navega até a declaração.
 - Analisa todas as requests de uma collection sem enviá-las; cURL e collections nunca são executados.
+- Reutiliza a inspeção dos endpoints enquanto o projeto não muda e executa parsing, ranking e preparação de resultados em segundo plano.
+- Renderiza resultados gradualmente e carrega detalhes ao expandir, para reduzir o trabalho inicial da interface.
 - **Privacidade:** não chama IA nem envia código para serviços externos. O plugin apenas lê o projeto e os arquivos cURL/collection selecionados localmente.
 
 ## Interface web JCEF (IntelliJ)
@@ -69,12 +71,56 @@ O projeto inclui um Gradle Wrapper (`gradlew`, `gradlew.bat` e `gradle/wrapper/g
 
 Em Linux/macOS, use `./gradlew` no lugar de `.\gradlew.bat`. A primeira execução precisa de Internet para baixar o Gradle, a IDE de desenvolvimento e as dependências. O workflow `.github/workflows/build.yml` executa a validação, faz o build e publica o ZIP como artefato do GitHub Actions.
 
-## Localizar uma integração
+## Como usar
 
-1. Abra um projeto Java Spring com fontes indexadas e a janela **JSON Lens**.
-2. Na aba **Localizar interação**, cole um cURL ou carregue um export Postman/Insomnia.
-3. Clique em **Localizar no código**. Os resultados mostram os controllers que recebem e os clientes Feign que enviam requests parecidos.
-4. Confira evidências e pontuação; use **Abrir** para navegar até o método sugerido.
+Os passos abaixo descrevem a interface JCEF. No modo alternativo Swing, os nomes e a disposição dos controles podem variar.
+
+### 1. Abrir o plugin e visualizar um endpoint
+
+1. Instale o ZIP compilado conforme a seção anterior, reinicie a IDE se solicitado e abra um projeto Java Spring.
+2. Aguarde a indexação e abra a tool window **JSON Lens**, na lateral da IDE.
+3. No editor Java, posicione o cursor em um método de controller ou cliente Feign reconhecido. Na aba **Preview**, confira a direção, o método HTTP, a rota e o nome do endpoint.
+4. Se houver mais de um método, escolha o desejado no seletor. Use **Fixar** para continuar acompanhando esse endpoint enquanto navega ou edita outros arquivos; use **Desafixar** para voltar a acompanhar o editor.
+5. Alterne entre **Request** e **Response**. Ative **Mostrar schema** para trocar o JSON de exemplo pelo schema inferido; use **Copiar** para copiar a visualização atual.
+6. Abra **Detalhes** para consultar a direção, rota, parâmetros e avisos da análise.
+
+O JSON de exemplo contém valores fictícios. Alterações no código são acompanhadas com atraso aproximado de 350 ms, após a atualização do PSI; enquanto o Java estiver incompleto ou a IDE estiver indexando, o resultado pode demorar a refletir a edição.
+
+### 2. Localizar uma interação
+
+1. Abra **Localizar** e selecione **cURL** ou **Collection**.
+2. Em **cURL**, cole o comando ou use **Abrir .txt / .curl**. Em **Collection**, carregue um arquivo JSON exportado do Postman v2.1 ou Insomnia. A prévia é formatada para leitura; para arquivos grandes, é exibido apenas o início original, mas a busca analisa o conteúdo completo.
+3. Clique em **Localizar no código**. Para cada request, o plugin apresenta candidatos separados em **Recebem / Controllers** e **Enviam / Feign Clients**.
+4. Confira rota, método, evidências e pontuações. Use **Expandir** para ver os exemplos inferidos de request e response e possíveis divergências estruturais; **Abrir código** leva à declaração Java.
+5. Para comparar um candidato com um contrato externo, clique em **Comparar contrato** no cartão correspondente e siga os passos da próxima seção.
+
+Os resultados de cURL e collection são mantidos separadamente durante a sessão. O divisor da área de busca pode ser arrastado para ajustar a entrada e os resultados. A busca apenas interpreta os dados: **não executa o cURL nem as requests da collection**.
+
+Para evitar trabalho repetido, mover o cursor não refaz buscas anteriores; alterações no PSI do projeto agendam uma nova análise. A lista de endpoints é reutilizada enquanto a revisão do projeto não muda. Resultados aparecem em lotes e os detalhes são preparados ao expandir cada cartão. Essas medidas reduzem trabalho desnecessário, mas o tempo de resposta ainda depende do projeto, da indexação e do tamanho das entradas.
+
+O **match** é um ranking heurístico de semelhança entre a requisição e o endpoint. A **aderência** é uma estimativa de comparação do payload; são medidas diferentes e nenhuma comprova o tráfego em execução. Sem body JSON analisável, a busca pode depender apenas de rota e método, e a aderência pode não estar disponível.
+
+### 3. Comparar um contrato
+
+1. Para comparar o endpoint aberto no editor, selecione-o em **Preview** e abra **Contratos**. Para comparar outro candidato, use **Comparar contrato** no resultado de uma busca.
+2. Selecione **Request** ou **Response** e cole o contrato no campo de texto, ou clique em **Carregar contrato JSON / YAML…**. São aceitos JSON de exemplo, JSON Schema e OpenAPI 3.x em JSON ou YAML.
+3. Confira o percentual estimado, erros, avisos e caminhos dos campos apontados. A análise é atualizada ao editar o contrato; **Validar contrato** também solicita a comparação.
+4. Ajuste o DTO ou o contrato conforme necessário e acompanhe o resultado após a reanálise. A comparação é estática: mesmo 100% não garante compatibilidade em runtime.
+
+Em OpenAPI, o método HTTP e a rota precisam corresponder à operação Java; a opção selecionada determina se será usado o schema do request ou de uma resposta suportada. JSON de exemplo não define formalmente campos obrigatórios. As comparações consideram a direção: no request, um controller é receptor e um Feign é emissor; no response, os papéis se invertem.
+
+**Exemplo incluído no repositório:** adicione `examples/BibliotecaClient.java` a um projeto Java com as dependências Spring Cloud OpenFeign, Jackson e Jakarta Validation, aguarde a indexação e selecione o método `criar`. Em **Contratos**, escolha **Request** e carregue `examples/biblioteca-openapi.yaml`. O contrato espera `isbn`, mas o DTO declara `codigoIsbn` via `@JsonProperty`: examine os apontamentos e ajuste o mapeamento conforme o contrato. Esse exemplo é fictício e não envia dados a outro serviço.
+
+### 4. Ajustar aparência
+
+Use o botão de **configurações** no cabeçalho para escolher idioma, tema e fontes/tamanhos para informações, JSON e cURL. Os temas disponíveis são **Ember**, **Midnight**, **Base16** e **Ocean**; as preferências são salvas localmente. A interface HTML oferece famílias de fonte genéricas; no Swing, a seleção de fontes pode ser diferente.
+
+### Formatos e limites
+
+- cURL: até 2 MB; `--data-urlencode` não é suportado. Para comparar o body, forneça JSON.
+- Collection: até 5 MB e 200 requests; use um export JSON Postman v2.1 ou Insomnia.
+- Contrato na interface JCEF: até 1 MB. Em OpenAPI, são reconhecidas referências locais `#/...`, não referências externas; `allOf` é tratado parcialmente e somente a primeira alternativa de `oneOf` ou `anyOf` é analisada.
+- O código de saída Feign pode fornecer indícios estáticos de mapeamento de valores, mas transformações indiretas, mappers e valores em runtime podem não ser comprovados.
 
 ## Diferença entre controller e cliente de integração
 

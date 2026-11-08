@@ -39,6 +39,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
@@ -58,11 +60,14 @@ public final class LensWebPanel implements Disposable {
     private final AtomicLong curlScanGeneration = new AtomicLong();
     private final AtomicLong collectionScanGeneration = new AtomicLong();
     private final AtomicLong compareGeneration = new AtomicLong();
+    private final AtomicInteger candidateId = new AtomicInteger();
+    private final LensWebSearch.EndpointCache endpointCache = new LensWebSearch.EndpointCache();
     private final Map<Integer, JavaEndpointInspector.EndpointCandidate> candidates = new HashMap<>();
     private final Map<String, List<Integer>> candidateIdsBySource = new HashMap<>();
-    private final Map<String, JsonObject> priorScans = new HashMap<>();
+    private final Map<String, String> priorScans = new HashMap<>();
     private final Map<String, String> priorInputs = new HashMap<>();
-    private int candidateId = 0;
+    private final Map<String, Long> scanRevisions = new HashMap<>();
+    private Future<?> compareTask;
     private boolean ready;
     private boolean disposed;
     private boolean pinned;
@@ -146,8 +151,8 @@ public final class LensWebPanel implements Disposable {
             case "pin" -> togglePin();
             case "scan" -> scan(string(message, "source"), string(message, "raw"));
             case "source" -> {
-                JsonObject cached = priorScans.get(string(message, "source"));
-                if (cached != null) send(cached);
+                String cached = priorScans.get(string(message, "source"));
+                if (cached != null) sendJson(cached);
             }
             case "compare" -> compare(string(message, "raw"), string(message, "mode"), number(message, "candidateId"));
             case "open" -> open(number(message, "id"));
@@ -204,6 +209,11 @@ public final class LensWebPanel implements Disposable {
 
     private void refresh() {
         if (!ready || disposed || project.isDisposed()) return;
+        long revision = PsiModificationTracker.getInstance(project).getModificationCount();
+        for (var entry : List.copyOf(priorInputs.entrySet())) {
+            if (!Long.valueOf(revision).equals(scanRevisions.get(entry.getKey())))
+                scan(entry.getKey(), entry.getValue());
+        }
         VirtualFile file;
         int offset;
         if (pinned) {
@@ -251,9 +261,6 @@ public final class LensWebPanel implements Disposable {
                 JsonObject refresh = new JsonObject();
                 refresh.addProperty("type", "recompare");
                 send(refresh);
-                if (!priorInputs.isEmpty()) {
-                    for (var entry : List.copyOf(priorInputs.entrySet())) scan(entry.getKey(), entry.getValue());
-                }
             }).submit(AppExecutorUtil.getAppExecutorService());
     }
 
@@ -286,58 +293,93 @@ public final class LensWebPanel implements Disposable {
     private void scan(String source, String raw) {
         if (!source.equals("curl") && !source.equals("collection")) return;
         if (raw.length() > 5_000_000) { notice("Entrada acima do limite permitido."); return; }
-        List<HttpRequestSample> requests;
-        try {
-            if (source.equals("curl")) {
-                CurlRequestParser.Request parsed = new CurlRequestParser().parse(raw);
-                requests = List.of(new HttpRequestSample("cURL", parsed.method(), parsed.url(),
-                    parsed.path(), parsed.body()));
-            } else {
-                requests = new CollectionRequestParser().parse(raw);
-            }
-        } catch (RuntimeException ex) {
-            JsonObject error = new JsonObject();
-            error.addProperty("type", "scan-error");
-            error.addProperty("source", source);
-            error.addProperty("message", ex.getMessage());
-            send(error);
-            return;
-        }
-        priorInputs.put(source, raw);
         AtomicLong sequence = source.equals("curl") ? curlScanGeneration : collectionScanGeneration;
         long generation = sequence.incrementAndGet();
-        ReadAction.nonBlocking(() -> {
-            List<JavaEndpointInspector.EndpointCandidate> found = new JavaEndpointInspector(project).inspectAll();
-            InteractionMatcher matcher = new InteractionMatcher();
-            List<List<InteractionMatcher.Match>> rankings = new ArrayList<>();
-            for (HttpRequestSample request : requests) rankings.add(matcher.rank(request, found));
-            return new LensWebSearch.Result(found, requests, rankings);
-        }).inSmartMode(project).expireWith(this).coalesceBy(this, "search", source)
-            .finishOnUiThread(ModalityState.any(), result -> {
-                if (disposed || generation != sequence.get()) return;
-                List<Integer> newIds = new ArrayList<>();
-                JsonObject payload = LensWebSearch.toJson(source, result, candidate -> {
-                    int id = registerCandidate(candidate);
-                    newIds.add(id);
-                    return id;
-                });
-                for (Integer previous : candidateIdsBySource.getOrDefault(source, List.of())) {
-                    candidates.remove(previous);
+        priorInputs.put(source, raw);
+        scanRevisions.put(source, PsiModificationTracker.getInstance(project).getModificationCount());
+        AppExecutorUtil.getAppExecutorService().execute(() -> {
+            final List<HttpRequestSample> requests;
+            try {
+                if (source.equals("curl")) {
+                    CurlRequestParser.Request parsed = new CurlRequestParser().parse(raw);
+                    requests = List.of(new HttpRequestSample("cURL", parsed.method(), parsed.url(),
+                        parsed.path(), parsed.body()));
+                } else {
+                    requests = new CollectionRequestParser().parse(raw);
                 }
-                candidateIdsBySource.put(source, List.copyOf(newIds));
-                priorScans.put(source, payload);
-                send(payload);
-            }).submit(AppExecutorUtil.getAppExecutorService());
+            } catch (RuntimeException ex) {
+                SwingUtilities.invokeLater(() -> {
+                    if (disposed || generation != sequence.get()) return;
+                    priorInputs.remove(source);
+                    scanRevisions.remove(source);
+                    JsonObject error = new JsonObject();
+                    error.addProperty("type", "scan-error");
+                    error.addProperty("source", source);
+                    error.addProperty("message", ex.getMessage());
+                    send(error);
+                });
+                return;
+            }
+            if (generation != sequence.get()) return;
+            ReadAction.nonBlocking(() -> {
+                long revision = PsiModificationTracker.getInstance(project).getModificationCount();
+                return new IndexedEndpoints(revision,
+                    endpointCache.get(revision, () -> new JavaEndpointInspector(project).inspectAll()));
+            }).inSmartMode(project).expireWith(this)
+                .expireWhen(() -> generation != sequence.get())
+                .coalesceBy(this, "search", source)
+                .finishOnUiThread(ModalityState.any(), indexed -> {
+                    if (disposed || generation != sequence.get()) return;
+                    if (indexed.revision() != PsiModificationTracker.getInstance(project).getModificationCount()) {
+                        scan(source, raw);
+                        return;
+                    }
+                    scanRevisions.put(source, indexed.revision());
+                    prepareSearch(source, requests, indexed.endpoints(), sequence, generation);
+                }).submit(AppExecutorUtil.getAppExecutorService());
+        });
     }
 
-    private int registerCandidate(JavaEndpointInspector.EndpointCandidate candidate) {
-        int id = ++candidateId;
-        candidates.put(id, candidate);
-        return id;
+    private record IndexedEndpoints(long revision, List<JavaEndpointInspector.EndpointCandidate> endpoints) {}
+
+    private void prepareSearch(String source, List<HttpRequestSample> requests,
+            List<JavaEndpointInspector.EndpointCandidate> found, AtomicLong sequence, long generation) {
+        AppExecutorUtil.getAppExecutorService().execute(() -> {
+            InteractionMatcher matcher = new InteractionMatcher();
+            List<List<InteractionMatcher.Match>> rankings = new ArrayList<>();
+            for (HttpRequestSample request : requests) {
+                if (generation != sequence.get()) return;
+                rankings.add(matcher.rank(request, found));
+            }
+            if (generation != sequence.get()) return;
+            Map<Integer, JavaEndpointInspector.EndpointCandidate> registered = new HashMap<>();
+            LensWebSearch.Result result = new LensWebSearch.Result(found, requests, rankings);
+            JsonObject payload = LensWebSearch.toJson(source, result, candidate -> {
+                int id = candidateId.incrementAndGet();
+                registered.put(id, candidate);
+                return id;
+            });
+            String json = JSON.toJson(payload);
+            SwingUtilities.invokeLater(() -> {
+                if (disposed || generation != sequence.get()) return;
+                for (Integer previous : candidateIdsBySource.getOrDefault(source, List.of()))
+                    candidates.remove(previous);
+                candidates.putAll(registered);
+                candidateIdsBySource.put(source, List.copyOf(registered.keySet()));
+                priorScans.put(source, json);
+                sendJson(json);
+            });
+        });
     }
 
     private void compare(String raw, String mode, int candidateId) {
+        long generation = compareGeneration.incrementAndGet();
+        if (compareTask != null) compareTask.cancel(true);
         JavaEndpointInspector.EndpointCandidate matched = candidates.get(candidateId);
+        if (candidateId != -1 && matched == null) {
+            notice("O resultado da busca mudou; selecione novamente o endpoint para comparar.");
+            return;
+        }
         if (snapshot == null && matched == null) { notice("Selecione primeiro um endpoint Java."); return; }
         if (raw.isBlank() || raw.length() > 1_000_000) {
             notice("Informe um contrato JSON/YAML de até 1 MB.");
@@ -345,8 +387,8 @@ public final class LensWebPanel implements Disposable {
         }
         EndpointSnapshot current = matched == null ? snapshot : matched.snapshot();
         boolean response = mode.equals("response");
-        long generation = compareGeneration.incrementAndGet();
-        AppExecutorUtil.getAppExecutorService().execute(() -> {
+        compareTask = AppExecutorUtil.getAppExecutorService().submit(() -> {
+            if (generation != compareGeneration.get()) return;
             JsonObject payload = new JsonObject();
             payload.addProperty("type", "comparison");
             try {
@@ -354,6 +396,7 @@ public final class LensWebPanel implements Disposable {
                     ? "contract.json" : "contract.yaml";
                 ContractParser.Parsed parsed = new ContractParser().parseText(
                     raw, fileName, current.verb, current.path, response);
+                if (generation != compareGeneration.get() || Thread.currentThread().isInterrupted()) return;
                 InteractionMatcher matcher = new InteractionMatcher();
                 JavaEndpointInspector.EndpointCandidate target = matched == null
                     ? new JavaEndpointInspector.EndpointCandidate(current, null, 0) : matched;
@@ -389,8 +432,12 @@ public final class LensWebPanel implements Disposable {
     }
 
     private void send(JsonObject message) {
+        sendJson(JSON.toJson(message));
+    }
+
+    private void sendJson(String json) {
         if (!ready || disposed) return;
-        String js = "window.JsonLensUI&&window.JsonLensUI.onNative(" + JSON.toJson(message) + ");";
+        String js = "window.JsonLensUI&&window.JsonLensUI.onNative(" + json + ");";
         browser.getCefBrowser().executeJavaScript(js, browser.getCefBrowser().getURL(), 0);
     }
 
@@ -423,6 +470,7 @@ public final class LensWebPanel implements Disposable {
         curlScanGeneration.incrementAndGet();
         collectionScanGeneration.incrementAndGet();
         compareGeneration.incrementAndGet();
+        if (compareTask != null) compareTask.cancel(true);
         refreshTimer.stop();
         commands.dispose();
         browser.dispose();

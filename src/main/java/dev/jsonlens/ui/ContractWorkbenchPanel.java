@@ -69,7 +69,11 @@ final class ContractWorkbenchPanel implements Disposable {
         caption.add(selected);
         top.add(caption, BorderLayout.CENTER);
 
-        JPanel controls = LensUi.adaptiveRow(JBUI.scale(440), new JLabel("Verificar"), direction, open, copy);
+        JPanel controls = new JPanel(new GridLayout(1, 3, JBUI.scale(5), 0));
+        controls.setOpaque(false);
+        controls.add(direction);
+        controls.add(open);
+        controls.add(copy);
         top.add(controls, BorderLayout.SOUTH);
         root.add(top, BorderLayout.NORTH);
 
@@ -131,8 +135,11 @@ final class ContractWorkbenchPanel implements Disposable {
 
     void applyLanguage() {
         heading.setText(LensPreferences.text("Comparar contrato externo", "Compare external contract"));
-        open.setText(LensPreferences.text("Abrir JSON/YAML...", "Open JSON/YAML..."));
-        copy.setText(LensPreferences.text("Copiar análise", "Copy findings"));
+        open.setText(LensPreferences.text("Abrir arquivo", "Open file"));
+        open.setToolTipText(LensPreferences.text("Abrir contrato JSON, YAML ou OpenAPI",
+            "Open a JSON, YAML or OpenAPI contract"));
+        copy.setText(LensPreferences.text("Copiar", "Copy"));
+        copy.setToolTipText(LensPreferences.text("Copiar resultado da análise", "Copy analysis findings"));
         if (snapshot == null) selected.setText(LensPreferences.text(
             "Selecione um controller ou Feign no editor Java.", "Select a controller or Feign client in the Java editor."));
         debounce.restart();
@@ -153,8 +160,13 @@ final class ContractWorkbenchPanel implements Disposable {
         findings.setFont(new Font(LensPreferences.infoFont(), Font.PLAIN, LensPreferences.infoSize()));
         open.setBackground(theme.card());
         open.setForeground(theme.primaryText());
+        open.setFont(open.getFont().deriveFont(10f));
         copy.setBackground(theme.card());
         copy.setForeground(theme.primaryText());
+        copy.setFont(copy.getFont().deriveFont(10f));
+        direction.setFont(direction.getFont().deriveFont(10f));
+        open.setMargin(JBUI.insets(4, 2));
+        copy.setMargin(JBUI.insets(4, 2));
         root.repaint();
     }
 
