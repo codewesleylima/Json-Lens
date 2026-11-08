@@ -18,6 +18,17 @@ import com.intellij.openapi.fileEditor.FileEditorManagerListener;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.ide.CopyPasteManager;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.progress.ProgressManager;
+import com.intellij.openapi.progress.ProgressIndicator;
+import com.intellij.openapi.progress.ProcessCanceledException;
+import com.intellij.openapi.progress.Task;
+import com.intellij.openapi.util.Key;
+import com.intellij.openapi.vfs.LocalFileSystem;
+import dev.jsonlens.analysis.WContractGraph;
+import dev.jsonlens.analysis.WContractAssessment;
+import dev.jsonlens.analysis.WContractProjectState;
+import dev.jsonlens.contract.CurlGenerator;
+import org.jetbrains.annotations.NotNull;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.util.PsiModificationTracker;
 import com.intellij.ui.jcef.JBCefBrowser;
@@ -49,6 +60,7 @@ import javax.swing.Timer;
 
 /** The approved web layout is the view; IntelliJ PSI and the existing Java parsers remain authoritative. */
 public final class LensWebPanel implements Disposable {
+    public static final Key<LensWebPanel> ACTIVE = Key.create("wcontract.active.web.panel");
     private static final int MAX_MESSAGE = 5_500_000;
     private static final Gson JSON = new GsonBuilder().serializeNulls().create();
     private final Project project;
@@ -68,6 +80,12 @@ public final class LensWebPanel implements Disposable {
     private final Map<String, String> priorInputs = new HashMap<>();
     private final Map<String, Long> scanRevisions = new HashMap<>();
     private Future<?> compareTask;
+    private final AtomicLong assessmentGeneration = new AtomicLong();
+    private volatile ProgressIndicator activeAssessment;
+    private List<JavaEndpointInspector.EndpointCandidate> lastGraphCandidates = List.of();
+    private WContractGraph.Graph lastGraph = new WContractGraph.Graph(List.of(), 0);
+    private long lastGraphRevision = -1;
+    private String navigationAfterReady = null;
     private boolean ready;
     private boolean disposed;
     private boolean pinned;
@@ -79,6 +97,7 @@ public final class LensWebPanel implements Disposable {
 
     public LensWebPanel(Project project) {
         this.project = project;
+        project.putUserData(ACTIVE, this);
         refreshTimer.setRepeats(false);
         commands.addHandler(raw -> {
             if (raw == null || raw.length() > MAX_MESSAGE) return null;
@@ -93,8 +112,8 @@ public final class LensWebPanel implements Disposable {
             return null;
         });
         root.add(browser.getComponent(), BorderLayout.CENTER);
-        String html = resource("/web/json-lens.html");
-        String nativeScript = resource("/web/jsonlens-native.js");
+        String html = resource("/web/wcontract.html");
+        String nativeScript = resource("/web/wcontract-native.js");
         String inject = "<script>window.__jsonLensNative=function(action){" +
             commands.inject("JSON.stringify(action)") + "};</script>";
         browser.loadHTML(html.replace("</body>",
@@ -139,6 +158,14 @@ public final class LensWebPanel implements Disposable {
                 init.addProperty("curlFont", LensPreferences.curlFont());
                 init.addProperty("curlSize", LensPreferences.curlSize());
                 send(init);
+                sendHistory();
+                if (navigationAfterReady != null) {
+                    JsonObject nav = new JsonObject();
+                    nav.addProperty("type","navigate");
+                    nav.addProperty("view",navigationAfterReady);
+                    send(nav);
+                    navigationAfterReady = null;
+                }
                 schedule();
             }
             case "select" -> {
@@ -149,18 +176,42 @@ public final class LensWebPanel implements Disposable {
                 }
             }
             case "pin" -> togglePin();
+            case "refresh" -> schedule();
+            case "integrations" -> requestIntegrations();
+            case "evaluate" -> beginAssessment(string(message, "scope"));
+            case "cancel-evaluation" -> cancelAssessment();
+            case "history" -> sendHistory();
+            case "bind-contract" -> bindContract(message);
+            case "unbind-contract" -> unbindContract(message);
+            case "open-location" -> openLocation(string(message, "path"), number(message, "offset"));
             case "scan" -> scan(string(message, "source"), string(message, "raw"));
             case "source" -> {
                 String cached = priorScans.get(string(message, "source"));
                 if (cached != null) sendJson(cached);
             }
-            case "compare" -> compare(string(message, "raw"), string(message, "mode"), number(message, "candidateId"));
+            case "compare" -> compare(string(message, "raw"), string(message, "mode"),
+                number(message, "candidateId"), string(message, "key"));
             case "open" -> open(number(message, "id"));
             case "copy" -> CopyPasteManager.getInstance().setContents(
                 new StringSelection(string(message, "text")));
             case "preferences" -> savePreferences(message);
             default -> { }
         }
+    }
+
+    /** Invoked by native EditorPopupMenu actions once the tool window has been activated. */
+    public void focusFromEditor(VirtualFile file, int offset, String view) {
+        pinned = false;
+        pinnedFile = null;
+        forcedMethodKey = null;
+        if (!ready) navigationAfterReady = view;
+        else {
+            JsonObject nav = new JsonObject();
+            nav.addProperty("type", "navigate");
+            nav.addProperty("view", view);
+            send(nav);
+        }
+        schedule();
     }
 
     private void savePreferences(JsonObject message) {
@@ -281,6 +332,8 @@ public final class LensWebPanel implements Disposable {
         result.addProperty("verb", data.verb);
         result.addProperty("path", data.path);
         result.addProperty("direction", data.direction);
+        result.addProperty("key", WContractProjectState.key(data));
+        result.addProperty("curl", CurlGenerator.generate(data));
         result.add("request", JSON.toJsonTree(data.request.sample(0)));
         result.add("response", JSON.toJsonTree(data.response.sample(0)));
         result.add("requestSchema", JSON.toJsonTree(data.request.toSchema(0)));
@@ -372,10 +425,17 @@ public final class LensWebPanel implements Disposable {
         });
     }
 
-    private void compare(String raw, String mode, int candidateId) {
+    private void compare(String raw, String mode, int candidateId, String key) {
         long generation = compareGeneration.incrementAndGet();
         if (compareTask != null) compareTask.cancel(true);
         JavaEndpointInspector.EndpointCandidate matched = candidates.get(candidateId);
+        if (matched == null && !key.isBlank()) {
+            for (var candidate : lastGraphCandidates)
+                if (key.equals(WContractProjectState.key(candidate.snapshot()))) {
+                    matched = candidate;
+                    break;
+                }
+        }
         if (candidateId != -1 && matched == null) {
             notice("O resultado da busca mudou; selecione novamente o endpoint para comparar.");
             return;
@@ -386,6 +446,12 @@ public final class LensWebPanel implements Disposable {
             return;
         }
         EndpointSnapshot current = matched == null ? snapshot : matched.snapshot();
+        if (!key.isBlank() && matched == null &&
+            (snapshot == null || !key.equals(WContractProjectState.key(snapshot)))) {
+            notice("Endpoint não encontrado; atualize o mapa de integrações.");
+            return;
+        }
+        final JavaEndpointInspector.EndpointCandidate selectedCandidate = matched;
         boolean response = mode.equals("response");
         compareTask = AppExecutorUtil.getAppExecutorService().submit(() -> {
             if (generation != compareGeneration.get()) return;
@@ -398,8 +464,8 @@ public final class LensWebPanel implements Disposable {
                     raw, fileName, current.verb, current.path, response);
                 if (generation != compareGeneration.get() || Thread.currentThread().isInterrupted()) return;
                 InteractionMatcher matcher = new InteractionMatcher();
-                JavaEndpointInspector.EndpointCandidate target = matched == null
-                    ? new JavaEndpointInspector.EndpointCandidate(current, null, 0) : matched;
+                JavaEndpointInspector.EndpointCandidate target = selectedCandidate == null
+                    ? new JavaEndpointInspector.EndpointCandidate(current, null, 0) : selectedCandidate;
                 InteractionMatcher.Review review = response
                     ? matcher.compareResponseContract(target, parsed) : matcher.compareContract(target, parsed);
                 payload.addProperty("score", review.adherencePercent());
@@ -413,6 +479,216 @@ public final class LensWebPanel implements Disposable {
                 if (!disposed && generation == compareGeneration.get()) send(payload);
             });
         });
+    }
+
+
+    private record Topology(List<JavaEndpointInspector.EndpointCandidate> endpoints,
+                            WContractGraph.Graph graph, long revision) {}
+
+    private void requestIntegrations() {
+        if (disposed) return;
+        String currentKey = snapshot == null ? "" : WContractProjectState.key(snapshot);
+        if (currentKey.isBlank()) { notice("Selecione um endpoint Java primeiro."); return; }
+        long revision = PsiModificationTracker.getInstance(project).getModificationCount();
+        if (revision == lastGraphRevision) {
+            sendIntegrations(currentKey);
+            return;
+        }
+        ReadAction.nonBlocking(() -> {
+            long stamp = PsiModificationTracker.getInstance(project).getModificationCount();
+            var all = endpointCache.get(stamp, () -> new JavaEndpointInspector(project).inspectAll());
+            var graph = new WContractGraph(project).build(all);
+            return new Topology(all, graph, stamp);
+        }).inSmartMode(project).expireWith(this).coalesceBy(this, "wcontract-topology")
+            .finishOnUiThread(ModalityState.any(), topology -> {
+                if (disposed) return;
+                if (topology.revision() != PsiModificationTracker.getInstance(project).getModificationCount()) {
+                    requestIntegrations(); return;
+                }
+                lastGraphCandidates = topology.endpoints();
+                lastGraph = topology.graph();
+                lastGraphRevision = topology.revision();
+                sendIntegrations(snapshot == null ? "" : WContractProjectState.key(snapshot));
+            }).submit(AppExecutorUtil.getAppExecutorService());
+    }
+
+    private void sendIntegrations(String key) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("type", "integrations");
+        JsonArray connections = new JsonArray();
+        for (var edge : lastGraph.connections())
+            if (edge.fromKey().equals(key)) connections.add(JSON.toJsonTree(edge));
+        payload.add("connections", connections);
+        JsonArray targets = new JsonArray();
+        for (var candidate : lastGraphCandidates) {
+            JsonObject entry = new JsonObject();
+            entry.addProperty("key", WContractProjectState.key(candidate.snapshot()));
+            entry.addProperty("title", candidate.snapshot().title);
+            entry.addProperty("verb", candidate.snapshot().verb);
+            entry.addProperty("path", candidate.snapshot().path);
+            targets.add(entry);
+        }
+        payload.add("targets", targets);
+        send(payload);
+    }
+
+    private void bindContract(JsonObject message) {
+        String key = string(message, "key");
+        String raw = string(message, "raw");
+        String name = stringOr(message, "source", "contrato.json");
+        boolean response = string(message, "mode").equals("response");
+        EndpointSnapshot target = findEndpoint(key);
+        if (target == null) { notice("O endpoint selecionado não está disponível."); return; }
+        if (raw.isBlank() || raw.length() > 180_000) {
+            notice("Forneça um contrato local de até 180 KB."); return;
+        }
+        AppExecutorUtil.getAppExecutorService().execute(() -> {
+            String error = null;
+            try {
+                new ContractParser().parseText(raw, name, target.verb, target.path, response);
+            } catch (Exception ex) { error = ex.getMessage(); }
+            final String errorText = error;
+            SwingUtilities.invokeLater(() -> {
+                if (disposed) return;
+                if (errorText != null) { notice("Contrato inválido: " + errorText); return; }
+                try {
+                    project.getService(WContractProjectState.class).bind(key, name, raw, response);
+                    JsonObject done = new JsonObject();
+                    done.addProperty("type", "contract-saved");
+                    done.addProperty("message", "Contrato local associado. Execute AVALIAR para gerar o relatório.");
+                    send(done);
+                } catch (IllegalArgumentException ex) { notice(ex.getMessage()); }
+            });
+        });
+    }
+
+    private EndpointSnapshot findEndpoint(String key) {
+        if (snapshot != null && key.equals(WContractProjectState.key(snapshot))) return snapshot;
+        for (var candidate : lastGraphCandidates)
+            if (key.equals(WContractProjectState.key(candidate.snapshot()))) return candidate.snapshot();
+        return null;
+    }
+
+    private void unbindContract(JsonObject message) {
+        String key = string(message, "key");
+        boolean response = string(message, "mode").equals("response");
+        project.getService(WContractProjectState.class).unbind(key, response);
+        JsonObject done = new JsonObject();
+        done.addProperty("type", "contract-saved");
+        done.addProperty("message", "Associação removida para este endpoint e direção.");
+        send(done);
+    }
+
+    private void sendHistory() {
+        JsonObject msg = new JsonObject();
+        msg.addProperty("type", "history");
+        msg.add("history", JSON.toJsonTree(project.getService(WContractProjectState.class).history()));
+        send(msg);
+    }
+
+    private void progress(String phase, int percent, int completed, int total) {
+        JsonObject message = new JsonObject();
+        message.addProperty("type", "assessment-progress");
+        message.addProperty("phase", phase);
+        message.addProperty("indeterminate", percent < 0);
+        if (percent >= 0) message.addProperty("percent", percent);
+        message.addProperty("detail", total < 0 ? "Descobrindo endpoints no projeto."
+            : completed + " de " + total + " endpoint(s) processados");
+        SwingUtilities.invokeLater(() -> { if (!disposed) send(message); });
+    }
+
+    private void beginAssessment(String scope) {
+        if (!scope.equals("isolated") && !scope.equals("project")) scope = "isolated";
+        cancelAssessment(false);
+        long ticket = assessmentGeneration.incrementAndGet();
+        String finalScope = scope;
+        String selectedKey = snapshot == null ? "" : WContractProjectState.key(snapshot);
+        if (scope.equals("isolated") && selectedKey.isBlank()) {
+            notice("Selecione um endpoint para a avaliação isolada."); return;
+        }
+        var bindings = project.getService(WContractProjectState.class).bindings();
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, "WContract — Avaliação estática", true) {
+            @Override public void run(@NotNull ProgressIndicator indicator) {
+                activeAssessment = indicator;
+                indicator.setIndeterminate(true);
+                progress("Descobrindo endpoints e relações Java", -1, 0, -1);
+                try {
+                    long stamp = PsiModificationTracker.getInstance(project).getModificationCount();
+                    var all = ReadAction.compute(() ->
+                        endpointCache.get(stamp, () -> new JavaEndpointInspector(project).inspectAll()));
+                    indicator.checkCanceled();
+                    WContractGraph.Graph graph = ReadAction.compute(() -> new WContractGraph(project).build(all));
+                    indicator.checkCanceled();
+                    if (ticket != assessmentGeneration.get()) return;
+                    List<JavaEndpointInspector.EndpointCandidate> targets =
+                        finalScope.equals("project") ? all
+                            : all.stream().filter(e -> selectedKey.equals(WContractProjectState.key(e.snapshot()))).toList();
+                    if (targets.isEmpty()) throw new IllegalArgumentException("Endpoint não encontrado no projeto; atualize a seleção.");
+                    if (finalScope.equals("isolated")) {
+                        var relevant = graph.connections().stream()
+                            .filter(e -> e.fromKey().equals(selectedKey)).toList();
+                        graph = new WContractGraph.Graph(relevant,
+                            (int) relevant.stream().filter(e -> e.kind().equals("HTTP_NAO_RESOLVIDO")).count());
+                    }
+                    indicator.setIndeterminate(false);
+                    WContractGraph.Graph selectedGraph = graph;
+                    WContractAssessment.Report report = new WContractAssessment().evaluate(
+                        targets, selectedGraph, bindings, finalScope, (completed, total, phase) -> {
+                            indicator.checkCanceled();
+                            indicator.setFraction(total == 0 ? 1 : (double) completed/total);
+                            if (completed == total || completed % Math.max(1,total/100) == 0)
+                                progress(phase, total == 0 ? 100 : Math.round(completed*100f/total), completed, total);
+                        });
+                    indicator.checkCanceled();
+                    if (ticket != assessmentGeneration.get()) return;
+                    SwingUtilities.invokeLater(() -> {
+                        if (disposed || ticket != assessmentGeneration.get() || indicator.isCanceled()) return;
+                        project.getService(WContractProjectState.class).record(report.summary());
+                        JsonObject done = new JsonObject();
+                        done.addProperty("type", "assessment-result");
+                        done.add("report", JSON.toJsonTree(report));
+                        send(done);
+                    });
+                } catch (ProcessCanceledException ignored) {
+                    SwingUtilities.invokeLater(() -> assessmentCancelled(ticket, "Avaliação cancelada."));
+                } catch (RuntimeException ex) {
+                    SwingUtilities.invokeLater(() -> assessmentCancelled(ticket,
+                        "Avaliação incompleta: " + (ex.getMessage() == null ? ex.toString() : ex.getMessage())));
+                } finally {
+                    if (activeAssessment == indicator) activeAssessment = null;
+                }
+            }
+        });
+    }
+
+    private void assessmentCancelled(long ticket, String reason) {
+        if (disposed || ticket != assessmentGeneration.get()) return;
+        JsonObject data = new JsonObject();
+        data.addProperty("type", "assessment-cancelled");
+        send(data);
+        notice(reason);
+    }
+
+    private void cancelAssessment() { cancelAssessment(true); }
+    private void cancelAssessment(boolean announce) {
+        assessmentGeneration.incrementAndGet();
+        ProgressIndicator running = activeAssessment;
+        if (running != null) running.cancel();
+        if (announce) {
+            JsonObject data = new JsonObject();
+            data.addProperty("type", "assessment-cancelled");
+            send(data);
+        }
+    }
+
+    private void openLocation(String path, int offset) {
+        String base = project.getBasePath();
+        if (path == null || path.isBlank() || base == null || !path.startsWith(base + "/")) {
+            notice("Evidência de código fora do projeto ou sem localização resolvida."); return;
+        }
+        VirtualFile file = LocalFileSystem.getInstance().findFileByPath(path);
+        if (file == null || !file.isValid()) { notice("Arquivo não disponível."); return; }
+        new OpenFileDescriptor(project, file, Math.max(0,offset)).navigate(true);
     }
 
     private void open(int id) {
@@ -471,7 +747,9 @@ public final class LensWebPanel implements Disposable {
         collectionScanGeneration.incrementAndGet();
         compareGeneration.incrementAndGet();
         if (compareTask != null) compareTask.cancel(true);
+        cancelAssessment(false);
         refreshTimer.stop();
+        if (project.getUserData(ACTIVE) == this) project.putUserData(ACTIVE, null);
         commands.dispose();
         browser.dispose();
     }
