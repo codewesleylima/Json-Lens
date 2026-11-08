@@ -123,7 +123,7 @@
   choosePayload = kind => { model.payload = kind; renderPreview(); };
   togglePin = () => bridge('pin');
   copyPayload = () => bridge('copy', {text: model.actualJson});
-  renderPreview = renderPreview;
+  window.renderPreview = renderPreview;
   toggleDto = () => toast('Edite o DTO diretamente no editor Java do IntelliJ.');
   toggleJavaEditor = () => toast('Use o editor Java real; esta janela apenas inspeciona o projeto.');
 
