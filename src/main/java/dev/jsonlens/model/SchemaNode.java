@@ -16,6 +16,8 @@ import java.util.Set;
 public final class SchemaNode {
     public final String kind;
     public String format;
+    /** Source Java type when known; used only for static diagnostics. */
+    public String javaType;
     public String description;
     public boolean nullable;
     public Boolean additionalPropertiesAllowed;
@@ -75,6 +77,7 @@ public final class SchemaNode {
         JsonObject obj = new JsonObject();
         obj.addProperty("type", kind.equals("unknown") ? "unknown" : kind);
         if (format != null) obj.addProperty("format", format);
+        if (javaType != null) obj.addProperty("x-wcontract-java-type", javaType);
         if (description != null) obj.addProperty("description", description);
         if (nullable) obj.addProperty("nullable", true);
         if (additionalPropertiesAllowed != null) obj.addProperty("additionalProperties", additionalPropertiesAllowed);
