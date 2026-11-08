@@ -26,25 +26,26 @@ public final class CurlGenerator {
                     headers.add(name + ": <" + name.toUpperCase().replace("-", "_") + ">");
             }
         }
-        String url = "{{baseUrl}}" + path +
-            (queries.isEmpty() ? "" : "?" + String.join("&", queries));
-        StringBuilder out = new StringBuilder("curl --request ").append(verb)
-            .append(" \\\n  ").append(shellQuote(url))
-            .append(" \\\n  --header ").append(shellQuote("Accept: application/json"));
-        for (String header : headers) out.append(" \\\n  --header ").append(shellQuote(header));
+        String url = "{{baseUrl}}" + path + (queries.isEmpty() ? "" : "?" + String.join("&", queries));
+        StringBuilder out = new StringBuilder("curl --request ").append(verb);
+        addLine(out, shellQuote(url));
+        addLine(out, "--header " + shellQuote("Accept: application/json"));
+        for (String header : headers) addLine(out, "--header " + shellQuote(header));
         if (!"null".equals(endpoint.request.kind) && !"unknown".equals(endpoint.request.kind)) {
             String example = new GsonBuilder().setPrettyPrinting().create().toJson(endpoint.request.sample(0));
-            out.append(" \\\n  --header ").append(shellQuote("Content-Type: application/json"))
-                .append(" \\\n  --data ").append(shellQuote(example));
+            addLine(out, "--header " + shellQuote("Content-Type: application/json"));
+            addLine(out, "--data " + shellQuote(example));
         }
         return out.toString();
     }
 
+    private static void addLine(StringBuilder out, String value) {
+        out.append(" \\").append('\n').append("  ").append(value);
+    }
     private static String parameterName(String note) {
         int open = note.indexOf('(');
         return (open >= 0 ? note.substring(0, open) : note).trim();
     }
-
     static String shellQuote(String input) {
         return "'" + input.replace("'", "'\\''") + "'";
     }
