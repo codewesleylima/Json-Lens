@@ -54,7 +54,8 @@ public final class LensWebPanel implements Disposable {
     private final JBCefJSQuery commands = JBCefJSQuery.create(browser);
     private final Timer refreshTimer = new Timer(350, event -> refresh());
     private final AtomicLong inspectionGeneration = new AtomicLong();
-    private final AtomicLong scanGeneration = new AtomicLong();
+    private final AtomicLong curlScanGeneration = new AtomicLong();
+    private final AtomicLong collectionScanGeneration = new AtomicLong();
     private final AtomicLong compareGeneration = new AtomicLong();
     private final Map<Integer, JavaEndpointInspector.EndpointCandidate> candidates = new HashMap<>();
     private final Map<String, JsonObject> priorScans = new HashMap<>();
@@ -295,16 +296,17 @@ public final class LensWebPanel implements Disposable {
             return;
         }
         priorInputs.put(source, raw);
-        long generation = scanGeneration.incrementAndGet();
+        AtomicLong sequence = source.equals("curl") ? curlScanGeneration : collectionScanGeneration;
+        long generation = sequence.incrementAndGet();
         ReadAction.nonBlocking(() -> {
             List<JavaEndpointInspector.EndpointCandidate> found = new JavaEndpointInspector(project).inspectAll();
             InteractionMatcher matcher = new InteractionMatcher();
             List<List<InteractionMatcher.Match>> rankings = new ArrayList<>();
             for (HttpRequestSample request : requests) rankings.add(matcher.rank(request, found));
             return new LensWebSearch.Result(found, requests, rankings);
-        }).inSmartMode(project).expireWith(this).coalesceBy(this, "search")
+        }).inSmartMode(project).expireWith(this).coalesceBy(this, "search", source)
             .finishOnUiThread(ModalityState.any(), result -> {
-                if (disposed || generation != scanGeneration.get()) return;
+                if (disposed || generation != sequence.get()) return;
                 JsonObject payload = LensWebSearch.toJson(source, result, this::registerCandidate);
                 priorScans.put(source, payload);
                 send(payload);
@@ -399,7 +401,8 @@ public final class LensWebPanel implements Disposable {
         disposed = true;
         ready = false;
         inspectionGeneration.incrementAndGet();
-        scanGeneration.incrementAndGet();
+        curlScanGeneration.incrementAndGet();
+        collectionScanGeneration.incrementAndGet();
         compareGeneration.incrementAndGet();
         refreshTimer.stop();
         commands.dispose();
