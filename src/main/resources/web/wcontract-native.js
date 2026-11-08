@@ -325,6 +325,7 @@
         if(event.view==="assess-isolated")startAssessment("isolated");
         else if(event.view==="assess-project")startAssessment("project");
         else if(event.view==="integrations"){visible("integrations");send("integrations");}
+        else if(event.view==="catalog")visible("catalog");
         else visible("contract");
         break;
       case "notice":toast(event.message||"Aviso");break;
