@@ -1,0 +1,46 @@
+openapi: 3.0.3
+info:
+  title: API da Biblioteca (exemplo fictício)
+  version: 1.0.0
+paths:
+  /v1/acervo/livros:
+    post:
+      operationId: criarLivro
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CriarLivroRequest'
+      responses:
+        '201':
+          description: Livro cadastrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LivroCriado'
+components:
+  schemas:
+    CriarLivroRequest:
+      type: object
+      additionalProperties: false
+      required: [titulo, autor, anoPublicacao, isbn]
+      properties:
+        titulo:
+          type: string
+        autor:
+          type: string
+        anoPublicacao:
+          type: integer
+        isbn:
+          type: string
+    LivroCriado:
+      type: object
+      additionalProperties: false
+      required: [id, situacao]
+      properties:
+        id:
+          type: string
+          format: uuid
+        situacao:
+          type: string

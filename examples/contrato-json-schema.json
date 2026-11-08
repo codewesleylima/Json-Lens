@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["titulo", "autor", "anoPublicacao", "isbn"],
+  "additionalProperties": false,
+  "properties": {
+    "titulo": {"type": "string"},
+    "autor": {"type": "string"},
+    "anoPublicacao": {"type": "integer"},
+    "isbn": {"type": "string"}
+  }
+}

@@ -1,0 +1,11 @@
+<idea-plugin>
+    <id>dev.jsonlens.livecontracts</id>
+    <name>JSON Lens - Live API Contracts</name>
+    <vendor>JSON Lens</vendor>
+    <description><![CDATA[Interactive Spring REST and Feign request/response previews with live JSON contract validation.]]></description>
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.java</depends>
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="JSON Lens" anchor="right" factoryClass="dev.jsonlens.ui.LensToolWindowFactory"/>
+    </extensions>
+</idea-plugin>
