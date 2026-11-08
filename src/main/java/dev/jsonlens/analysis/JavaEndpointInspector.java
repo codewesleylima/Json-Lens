@@ -49,7 +49,10 @@ import java.util.Set;
 public final class JavaEndpointInspector {
     public record Inspection(List<Option> options, String selectedKey, EndpointSnapshot snapshot, String note) {}
     public record Option(String key, String label) { @Override public String toString() { return label; } }
-    public record ValueMapping(String targetField, String sourceField, String expression) {
+    public record ValueMapping(String targetField, String sourceField, String expression, String sourceFile, int sourceOffset) {
+        public ValueMapping(String targetField, String sourceField, String expression) {
+            this(targetField, sourceField, expression, "", -1);
+        }
         public boolean hasDifferentSource() {
             return sourceField != null && !normalizeName(targetField).equals(normalizeName(sourceField));
         }
@@ -132,7 +135,8 @@ public final class JavaEndpointInspector {
             PsiExpression[] arguments = call.getArgumentList().getExpressions();
             if (methodName == null || !methodName.startsWith("set") || methodName.length() <= 3 || arguments.length != 1) continue;
             String target = Character.toLowerCase(methodName.charAt(3)) + methodName.substring(4);
-            mappings.add(new ValueMapping(target, sourceProperty(arguments[0]), arguments[0].getText()));
+            mappings.add(new ValueMapping(target, sourceProperty(arguments[0]), arguments[0].getText(),
+                sourcePath(call.getContainingFile()), call.getTextOffset()));
         }
     }
 
@@ -144,8 +148,13 @@ public final class JavaEndpointInspector {
                 || !(target.getQualifierExpression() instanceof PsiReferenceExpression qualifier)
                 || qualifier.resolve() != bodyTarget) continue;
             PsiExpression value = assignment.getRExpression();
-            mappings.add(new ValueMapping(target.getReferenceName(), sourceProperty(value), value == null ? "" : value.getText()));
+            mappings.add(new ValueMapping(target.getReferenceName(), sourceProperty(value), value == null ? "" : value.getText(),
+                sourcePath(assignment.getContainingFile()), assignment.getTextOffset()));
         }
+    }
+
+    private static String sourcePath(PsiFile file) {
+        return file != null && file.getVirtualFile() != null ? file.getVirtualFile().getPath() : "";
     }
 
     private static PsiElement resolveReference(PsiExpression expression) {
