@@ -8,6 +8,9 @@ import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.EditorFactory;
 import com.intellij.openapi.editor.event.CaretEvent;
 import com.intellij.openapi.editor.event.CaretListener;
+import com.intellij.openapi.editor.ex.EditorEx;
+import com.intellij.openapi.fileTypes.FileTypeManager;
+import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.fileEditor.FileEditorManagerEvent;
 import com.intellij.openapi.fileEditor.FileEditorManagerListener;
@@ -70,8 +73,8 @@ public final class LensPanel implements Disposable {
     private final JComboBox<JavaEndpointInspector.Option> methods = new JComboBox<>();
     private final JComboBox<String> checkTarget = new JComboBox<>(new String[] {"Request", "Response"});
     private final JCheckBox schemaView = new JCheckBox("Mostrar schema");
-    private final JTextArea requestView = textArea(15);
-    private final JTextArea responseView = textArea(15);
+    private final Editor requestEditor;
+    private final Editor responseEditor;
     private final JTextArea findingsView = textArea(12);
     private final JTextArea notesView = textArea(12);
     private final JTextField contractRoute = new JTextField(18);
@@ -101,6 +104,8 @@ public final class LensPanel implements Disposable {
     public LensPanel(Project project) {
         this.project = project;
         this.state = PropertiesComponent.getInstance(project);
+        requestEditor = createJsonEditor(project);
+        responseEditor = createJsonEditor(project);
         root.setBorder(JBUI.Borders.empty(12));
         root.setPreferredSize(new Dimension(JBUI.scale(420), JBUI.scale(640)));
         title.setFont(title.getFont().deriveFont(Font.BOLD, 17f));
@@ -169,10 +174,10 @@ public final class LensPanel implements Disposable {
         root.add(top, BorderLayout.NORTH);
 
         JBTabbedPane tabs = new JBTabbedPane();
-        requestView.setText("Abra um controller Spring MVC...");
-        responseView.setText("Selecione um método para visualizar o response...");
-        tabs.addTab("Request", codeScrollPane(requestView));
-        tabs.addTab("Response", codeScrollPane(responseView));
+        setEditorText(requestEditor, "Abra um controller Spring MVC...");
+        setEditorText(responseEditor, "Selecione um método para visualizar o response...");
+        tabs.addTab("Request", requestEditor.getComponent());
+        tabs.addTab("Response", responseEditor.getComponent());
 
         JPanel contractPane = new JPanel(new BorderLayout(5, 5));
         contractPane.setOpaque(false);
@@ -378,8 +383,8 @@ public final class LensPanel implements Disposable {
         if (lastSnapshot == null) {
             endpointTitle.setText("Nenhum endpoint reconhecido");
             endpoint.setText(inspection.note());
-            requestView.setText("—");
-            responseView.setText("—");
+            setEditorText(requestEditor, "—");
+            setEditorText(responseEditor, "—");
             status.setText("Sem endpoint");
             notesView.setText(inspection.note());
             findingsView.setText("Selecione um endpoint compatível para comparar.");
@@ -446,10 +451,23 @@ public final class LensPanel implements Disposable {
         boolean schema = schemaView.isSelected();
         currentRequest = gson.toJson(schema ? lastSnapshot.request.toSchema(0) : lastSnapshot.request.sample(0));
         currentResponse = gson.toJson(schema ? lastSnapshot.response.toSchema(0) : lastSnapshot.response.sample(0));
-        requestView.setText(currentRequest);
-        requestView.setCaretPosition(0);
-        responseView.setText(currentResponse);
-        responseView.setCaretPosition(0);
+        setEditorText(requestEditor, currentRequest);
+        setEditorText(responseEditor, currentResponse);
+    }
+
+    private static Editor createJsonEditor(Project project) {
+        var document = EditorFactory.getInstance().createDocument("");
+        var fileType = FileTypeManager.getInstance().getFileTypeByExtension("json");
+        Editor editor = EditorFactory.getInstance().createEditor(document, project, fileType, true);
+        editor.getSettings().setLineNumbersShown(true);
+        editor.getSettings().setUseSoftWraps(true);
+        if (editor instanceof EditorEx editorEx) editorEx.setFontSize(15);
+        return editor;
+    }
+
+    private static void setEditorText(Editor editor, String text) {
+        WriteAction.run(() -> editor.getDocument().setText(text));
+        editor.getCaretModel().moveToOffset(0);
     }
 
     private static JTextArea textArea(int fontSize) {
@@ -506,5 +524,7 @@ public final class LensPanel implements Disposable {
         refreshTimer.stop();
         contractWatchTimer.stop();
         generation.incrementAndGet();
+        EditorFactory.getInstance().releaseEditor(requestEditor);
+        EditorFactory.getInstance().releaseEditor(responseEditor);
     }
 }
