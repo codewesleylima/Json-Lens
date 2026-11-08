@@ -83,7 +83,11 @@ public final class WContractAssessment {
                             binding.source, "$", warning, "Interpretação parcial de esquema.",
                             "Revise a referência ou composição de schemas apontada.", path(endpoint), endpoint.offset()));
                     }
-                    if (valid && review.findings().stream().noneMatch(f -> f.severity() == ContractComparator.Severity.WARNING))
+                    boolean originUncertain = review.valueMappings().stream()
+                        .anyMatch(mapping -> mapping.hasDifferentSource() || mapping.sourceField() == null);
+                    if (originUncertain) endpointWarnings++;
+                    if (valid && !originUncertain && review.findings().stream()
+                            .noneMatch(f -> f.severity() == ContractComparator.Severity.WARNING))
                         passedContracts++;
                 } catch (Exception ex) {
                     endpointWarnings++; summary.warnings++;
