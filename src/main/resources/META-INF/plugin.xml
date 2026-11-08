@@ -1,13 +1,29 @@
 <idea-plugin>
     <id>dev.jsonlens.livecontracts</id>
-    <name>JSON Lens - Live API Contracts</name>
+    <name>WContract - API Contract Intelligence</name>
     <icon>/icons/jsonlens-plugin.png</icon>
-    <vendor>JSON Lens</vendor>
-    <description><![CDATA[Interactive Spring REST and Feign request/response previews with live JSON contract validation.]]></description>
+    <vendor>WContract · Wesley</vendor>
+    <description><![CDATA[WContract: offline API endpoint contracts, integration graph, cURL generation, local risk assessment, and reports.]]></description>
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.java</depends>
     <depends>com.intellij.modules.jcef</depends>
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow id="JSON Lens" anchor="right" icon="/icons/jsonlens-plugin.png" factoryClass="dev.jsonlens.ui.LensToolWindowFactory"/>
+        <toolWindow id="WContract" anchor="right" icon="/icons/jsonlens-plugin.png" factoryClass="dev.jsonlens.ui.LensToolWindowFactory"/>
     </extensions>
+    <actions>
+        <group id="dev.jsonlens.WContractMenu" class="dev.jsonlens.ui.WContractActions$Menu" text="WContract" popup="true">
+            <action id="dev.jsonlens.WContract.View" class="dev.jsonlens.ui.WContractActions$View"
+                    text="Visualizar Request / Response"/>
+            <action id="dev.jsonlens.WContract.CopyCurl" class="dev.jsonlens.ui.WContractActions$CopyCurl"
+                    text="Copiar cURL do endpoint"/>
+            <separator/>
+            <action id="dev.jsonlens.WContract.Integrations" class="dev.jsonlens.ui.WContractActions$Integrations"
+                    text="Avaliar endpoints que interagem"/>
+            <action id="dev.jsonlens.WContract.Assess" class="dev.jsonlens.ui.WContractActions$Assess"
+                    text="Avaliar contrato do endpoint"/>
+            <action id="dev.jsonlens.WContract.AssessProject" class="dev.jsonlens.ui.WContractActions$AssessProject"
+                    text="Avaliar projeto completo"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </group>
+    </actions>
 </idea-plugin>
