@@ -12,7 +12,7 @@
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   const model = {
-    endpoint: null, methods: [], selected: '', pinned: false, payload: 'request',
+    endpoint: null, methods: [], selected: '', pinned: false, payload: 'request', compareCandidateId: -1,
     source: 'curl', collectionRaw: '', searches: {curl: null, collection: null},
     actualJson: '', contractMode: 'request', compareTimer: null
   };
@@ -97,6 +97,12 @@
     if (el('detailSignature')) el('detailSignature').textContent = endpoint.title || '';
     if (el('detailDirection')) el('detailDirection').textContent = endpoint.direction || '';
     if (el('detailRoute')) el('detailRoute').textContent = (endpoint.verb || '') + ' ' + (endpoint.path || '');
+    const notesHost = el('nativeDetailsNotes');
+    if (notesHost) {
+      notesHost.replaceChildren();
+      const entries = [...(endpoint.notes || []), ...(endpoint.warnings || [])];
+      notesHost.textContent = entries.length ? entries.join('\\n') : 'Nenhum aviso adicional para este endpoint.';
+    }
     if (el('actualFields')) el('actualFields').textContent =
       Object.keys((endpoint.requestSchema || {}).properties || endpoint.request || {}).join(' · ') || '—';
     if (el('compareActualLabel')) el('compareActualLabel').textContent = endpoint.title || '';
@@ -119,7 +125,7 @@
   }
 
   // The prototype's public handlers are intentionally replaced, not layered on top.
-  chooseEndpoint = key => bridge('select', {key});
+  chooseEndpoint = key => { model.compareCandidateId = -1; bridge('select', {key}); };
   choosePayload = kind => { model.payload = kind; renderPreview(); };
   togglePin = () => bridge('pin');
   copyPayload = () => bridge('copy', {text: model.actualJson});
@@ -130,6 +136,7 @@
   const oldNavigate = navigate;
   navigate = function (view) {
     if (view === 'coverage') return;
+    if (view === 'compare' && document.querySelector('#view-preview:not([hidden])')) model.compareCandidateId = -1;
     oldNavigate(view);
     if (view === 'search') renderResults();
     if (view === 'compare') scheduleNativeCompare();
@@ -234,6 +241,9 @@
       event.currentTarget.textContent = details.hidden ? 'Expandir' : 'Recolher';
     });
     card.querySelector('[data-action="contract"]').addEventListener('click', () => {
+      model.compareCandidateId = Number(match.id);
+      el('compareActualLabel').textContent = match.title || '';
+      el('actualFields').textContent = Object.keys(match.request || {}).join(' · ') || '—';
       navigate('compare');
       scheduleNativeCompare();
     });
@@ -285,7 +295,7 @@
     scheduleNativeCompare();
   };
   compareContracts = function () {
-    bridge('compare', {raw: el('contractInput').value, mode: model.contractMode});
+    bridge('compare', {raw: el('contractInput').value, mode: model.contractMode, candidateId: model.compareCandidateId});
   };
   scheduleNativeCompare = function () {
     clearTimeout(model.compareTimer);
@@ -399,6 +409,37 @@
     }
   }, true);
 
+  // The contract chooser is an actual local file input, not a prototype mock.
+  const contractBox = el('contractInput');
+  if (contractBox) {
+    const actions = document.createElement('div');
+    actions.className = 'row-actions';
+    const chooser = document.createElement('input');
+    chooser.type = 'file';
+    chooser.accept = '.json,.yaml,.yml,application/json,text/yaml,text/plain';
+    chooser.style.display = 'none';
+    const button = document.createElement('button');
+    button.className = 'secondary';
+    button.textContent = 'Carregar contrato JSON / YAML…';
+    button.addEventListener('click', () => chooser.click());
+    chooser.addEventListener('change', async () => {
+      const file = chooser.files?.[0];
+      if (!file) return;
+      if (file.size > 1_000_000) return toast('Contrato maior que 1 MB.');
+      contractBox.value = await file.text();
+      scheduleNativeCompare();
+      chooser.value = '';
+    });
+    actions.append(button, chooser);
+    contractBox.parentElement.insertBefore(actions, contractBox);
+  }
+  const detailsHost = document.querySelector('#view-details .details-list');
+  if (detailsHost) {
+    const detail = document.createElement('div');
+    detail.className = 'detail-row';
+    detail.innerHTML = '<label>Parâmetros e avisos encontrados</label><div id="nativeDetailsNotes" style="white-space:pre-wrap;overflow-wrap:anywhere">Abra um endpoint Java.</div>';
+    detailsHost.appendChild(detail);
+  }
   sourceNoDemo();
   model.endpoint = null;
   model.actualJson = '';
