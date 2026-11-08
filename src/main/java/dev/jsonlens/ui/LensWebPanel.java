@@ -21,6 +21,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.util.PsiModificationTracker;
 import com.intellij.ui.jcef.JBCefBrowser;
+import com.intellij.ui.jcef.JBCefBrowserBase;
 import com.intellij.ui.jcef.JBCefJSQuery;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import dev.jsonlens.analysis.InteractionMatcher;
@@ -51,7 +52,7 @@ public final class LensWebPanel implements Disposable {
     private final Project project;
     private final JPanel root = new JPanel(new BorderLayout());
     private final JBCefBrowser browser = new JBCefBrowser();
-    private final JBCefJSQuery commands = JBCefJSQuery.create(browser);
+    private final JBCefJSQuery commands = JBCefJSQuery.create((JBCefBrowserBase) browser);
     private final Timer refreshTimer = new Timer(350, event -> refresh());
     private final AtomicLong inspectionGeneration = new AtomicLong();
     private final AtomicLong curlScanGeneration = new AtomicLong();
