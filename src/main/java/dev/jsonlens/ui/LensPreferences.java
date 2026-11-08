@@ -11,7 +11,7 @@ final class LensPreferences {
     private LensPreferences() {}
 
     static String language() { return STORE.get("language", "pt-BR"); }
-    static String theme() { return STORE.get("theme", "Midnight"); }
+    static String theme() { return STORE.get("theme", "Ember"); }
     static String infoFont() { return font("infoFont", defaultFont()); }
     static String jsonFont() { return font("jsonFont", Font.MONOSPACED); }
     static String curlFont() { return font("curlFont", Font.MONOSPACED); }
