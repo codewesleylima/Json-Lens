@@ -262,7 +262,8 @@
   }
   function initSplit(){
     const split=$("contractSplit"),handle=split.querySelector(".resize-handle");
-    const memory=window.localStorage?.getItem("wcontract:split");
+    let memory=null;
+    try{memory=window.localStorage.getItem("wcontract:split");}catch(_){}
     if(memory){const n=Number(memory);if(n>=20&&n<=80)split.style.setProperty("--first-panel",n+"%");}
     let drag=false;
     const move=(event)=>{
