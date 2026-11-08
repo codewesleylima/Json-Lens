@@ -294,7 +294,9 @@ public final class JavaEndpointInspector {
                 SchemaNode string = SchemaNode.of("string");
                 if (name.equals("java.util.UUID")) string.format = "uuid";
                 else if (name.equals("java.time.LocalDate")) string.format = "date";
-                else if (name.startsWith("java.time.") && !name.endsWith("Time")) string.format = "date-time";
+                else if (name.startsWith("java.time.") && !name.equals("java.time.LocalTime")
+                    && !name.equals("java.time.OffsetTime")) string.format = "date-time";
+                if (name.startsWith("java.time.")) string.javaType = name;
                 return string;
             }
             case "java.lang.Integer", "java.lang.Long", "java.lang.Short", "java.lang.Byte", "java.math.BigInteger", "java.util.concurrent.atomic.AtomicInteger", "java.util.concurrent.atomic.AtomicLong" -> { return SchemaNode.of("integer"); }
