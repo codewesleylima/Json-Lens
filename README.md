@@ -24,9 +24,33 @@ Plugin experimental **0.1.0** para visualizar requests e responses declarados no
 - Analisa todas as requests de uma collection sem enviá-las; cURL e collections nunca são executados.
 - **Privacidade:** não chama IA nem envia código para serviços externos. O plugin apenas lê o projeto e os arquivos cURL/collection selecionados localmente.
 
+## Interface web JCEF (IntelliJ)
+
+A tool window **JSON Lens** agora renderiza a interface HTML isolada aprovada (`src/main/resources/web/json-lens.html`) em um **JBCefBrowser**, usando CSS preto/laranja. Os componentes em `src/main/resources/web/jsonlens-native.js` são apenas a camada visual e enviam ações ao Java por `JBCefJSQuery`.
+
+- **Preview:** endpoint atual, escolha de método, pin/unpin, Request/Response, JSON de exemplo ou Schema e cópia. Os dados exibidos são produzidos pela inspeção PSI Java e atualizados após alterações no projeto.
+- **Localizar interação:** cURL, Postman v2.1 e Insomnia, ranking separado de aderência, resultados preservados por origem, detalhes de campos e navegação até o método Java.
+- **Contratos:** JSON de exemplo, JSON Schema, OpenAPI JSON/YAML, Request/Response e comparação estática pela engine Java. Ao clicar em **Comparar contrato** num resultado, a comparação usa aquele candidato específico.
+- **Detalhes:** metadados, notas e avisos produzidos pela inspeção Java.
+- **Preferências:** idioma, tema e fontes. Sem IA, envio de código ou execução de HTTP.
+- **Sem JCEF:** o plugin usa a implementação anterior em Swing, que permanece no código como alternativa.
+
+**Requisito:** IntelliJ IDEA **2025.3.1 ou superior** com suporte Java e o módulo/plugin JCEF. O suporte começa no build `253.29346.138` por causa da dependência `com.intellij.modules.jcef`. O Java Runtime da IDE precisa oferecer JCEF; em runtimes personalizados sem suporte o plugin usa Swing.
+
+**Observação:** o checklist de validação e a edição de DTO demonstrativa presentes no HTML original foram ocultados na tool window. Para editar Java de verdade, use o editor da IDE. A inspeção é estática e não garante payload de runtime.
+
+### Verificação manual recomendada
+
+1. Execute `./gradlew runIde`, abra um projeto Java Spring e a janela JSON Lens.
+2. Navegue entre um `@RestController` e um `@FeignClient`, escolhendo métodos, fixando e desafixando; edite um DTO e confirme atualização após debounce.
+3. Teste Request, Response, Schema e Copiar; compare o exemplo de `BibliotecaClient.java` com `examples/biblioteca-openapi.yaml` e confira `codigoIsbn` versus `isbn`.
+4. Importe cURL e collections, veja resultados por direção, alterne entre origens, abra o código e compare o candidato selecionado.
+5. Teste larguras de **320, 390, 505 e 740 px**, fontes ampliadas, caminhos longos, foco via teclado e redução/expansão da tool window. Não deve haver texto fora dos cards.
+6. Faça o teste com runtime sem JCEF (quando disponível) para verificar a interface Swing alternativa.
+
 ## Como compilar
 
-**Requisitos para usar o plugin:** IntelliJ IDEA 2025.3 ou superior (build `253`+, com o plugin Java habilitado). O projeto que será analisado precisa conter fontes Java; as análises Spring reconhecem as anotações MVC e OpenFeign descritas acima. Não é necessário configurar Spring ou iniciar a aplicação para gerar as visualizações.
+**Requisitos para usar o plugin:** IntelliJ IDEA 2025.3.1 ou superior (build `253.29346.138`+, com os plugins Java e JCEF disponíveis). O projeto que será analisado precisa conter fontes Java; as análises Spring reconhecem as anotações MVC e OpenFeign descritas acima. Não é necessário configurar Spring ou iniciar a aplicação para gerar as visualizações.
 
 **Requisitos para compilar a partir do código-fonte:** JDK 21; o Gradle Wrapper incluído (Gradle 9.3.0); e acesso à Internet na **primeira compilação**, para baixar o Gradle, a IDE de desenvolvimento e as dependências. Não é necessário instalar Gradle globalmente.
 
