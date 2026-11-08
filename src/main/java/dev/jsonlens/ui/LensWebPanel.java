@@ -126,6 +126,12 @@ public final class LensWebPanel implements Disposable {
                 init.addProperty("type", "ready");
                 init.addProperty("language", LensPreferences.language());
                 init.addProperty("theme", LensPreferences.theme());
+                init.addProperty("infoFont", LensPreferences.infoFont());
+                init.addProperty("infoSize", LensPreferences.infoSize());
+                init.addProperty("jsonFont", LensPreferences.jsonFont());
+                init.addProperty("jsonSize", LensPreferences.jsonSize());
+                init.addProperty("curlFont", LensPreferences.curlFont());
+                init.addProperty("curlSize", LensPreferences.curlSize());
                 send(init);
                 schedule();
             }
