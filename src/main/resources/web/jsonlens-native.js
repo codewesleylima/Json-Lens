@@ -363,6 +363,19 @@
             const val = {Ember:'ember', Midnight:'midnight', Base16:'base16', Ocean:'ocean'}[data.theme];
             if (val) el('themePref').value = val;
           }
+          for (const field of ['info', 'json', 'curl']) {
+            const font = data[field + 'Font'];
+            const size = data[field + 'Size'];
+            const choice = el(field + 'FontPref'), scale = el(field + 'SizePref');
+            if (choice && font) {
+              const family = String(font).toLowerCase();
+              choice.value = /mono|consolas|cascadia/.test(family) ? 'mono'
+                : /serif/.test(family) ? 'serif' : 'ui';
+              if (![...choice.options].some(o => o.value === choice.value)) choice.value = 'ui';
+            }
+            if (scale && size) scale.value = String(size);
+          }
+          oldSavePreferences();
           break;
         case 'preview':
           model.endpoint = data.endpoint || null;
