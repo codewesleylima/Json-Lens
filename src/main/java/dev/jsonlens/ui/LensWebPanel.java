@@ -542,17 +542,22 @@ public final class LensWebPanel implements Disposable {
         if (raw.isBlank() || raw.length() > 180_000) {
             notice("Forneça um contrato local de até 180 KB."); return;
         }
+        // The Java parser chooses JSON/YAML from the source extension. Pasted YAML
+        // needs a YAML name even if the user did not import a file.
+        String actualName = (!raw.stripLeading().startsWith("{") && !raw.stripLeading().startsWith("["))
+            ? (name.toLowerCase(java.util.Locale.ROOT).matches(".*\\.(yaml|yml)$") ? name : "contrato.yaml")
+            : "contrato.json";
         AppExecutorUtil.getAppExecutorService().execute(() -> {
             String error = null;
             try {
-                new ContractParser().parseText(raw, name, target.verb, target.path, response);
+                new ContractParser().parseText(raw, actualName, target.verb, target.path, response);
             } catch (Exception ex) { error = ex.getMessage(); }
             final String errorText = error;
             SwingUtilities.invokeLater(() -> {
                 if (disposed) return;
                 if (errorText != null) { notice("Contrato inválido: " + errorText); return; }
                 try {
-                    project.getService(WContractProjectState.class).bind(key, name, raw, response);
+                    project.getService(WContractProjectState.class).bind(key, actualName, raw, response);
                     JsonObject done = new JsonObject();
                     done.addProperty("type", "contract-saved");
                     done.addProperty("message", "Contrato local associado. Execute AVALIAR para gerar o relatório.");
