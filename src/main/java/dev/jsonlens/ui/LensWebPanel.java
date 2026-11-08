@@ -141,7 +141,7 @@ public final class LensWebPanel implements Disposable {
                 JsonObject cached = priorScans.get(string(message, "source"));
                 if (cached != null) send(cached);
             }
-            case "compare" -> compare(string(message, "raw"), string(message, "mode"));
+            case "compare" -> compare(string(message, "raw"), string(message, "mode"), number(message, "candidateId"));
             case "open" -> open(number(message, "id"));
             case "copy" -> CopyPasteManager.getInstance().setContents(
                 new StringSelection(string(message, "text")));
@@ -319,13 +319,14 @@ public final class LensWebPanel implements Disposable {
         return id;
     }
 
-    private void compare(String raw, String mode) {
-        if (snapshot == null) { notice("Selecione primeiro um endpoint Java."); return; }
+    private void compare(String raw, String mode, int candidateId) {
+        JavaEndpointInspector.EndpointCandidate matched = candidates.get(candidateId);
+        if (snapshot == null && matched == null) { notice("Selecione primeiro um endpoint Java."); return; }
         if (raw.isBlank() || raw.length() > 1_000_000) {
             notice("Informe um contrato JSON/YAML de até 1 MB.");
             return;
         }
-        EndpointSnapshot current = snapshot;
+        EndpointSnapshot current = matched == null ? snapshot : matched.snapshot();
         boolean response = mode.equals("response");
         long generation = compareGeneration.incrementAndGet();
         AppExecutorUtil.getAppExecutorService().execute(() -> {
@@ -337,9 +338,10 @@ public final class LensWebPanel implements Disposable {
                 ContractParser.Parsed parsed = new ContractParser().parseText(
                     raw, fileName, current.verb, current.path, response);
                 InteractionMatcher matcher = new InteractionMatcher();
-                JavaEndpointInspector.EndpointCandidate fake = new JavaEndpointInspector.EndpointCandidate(current, null, 0);
+                JavaEndpointInspector.EndpointCandidate target = matched == null
+                    ? new JavaEndpointInspector.EndpointCandidate(current, null, 0) : matched;
                 InteractionMatcher.Review review = response
-                    ? matcher.compareResponseContract(fake, parsed) : matcher.compareContract(fake, parsed);
+                    ? matcher.compareResponseContract(target, parsed) : matcher.compareContract(target, parsed);
                 payload.addProperty("score", review.adherencePercent());
                 payload.addProperty("sourceType", parsed.sourceType());
                 payload.add("findings", JSON.toJsonTree(review.findings()));
